@@ -1,9 +1,20 @@
 # Tanuki Sequential Thought MCP
 
+[![smithery badge](https://smithery.ai/badge/@AppleJax2/tanukimcp-thought)](https://smithery.ai/server/@AppleJax2/tanukimcp-thought)
+
 Transform disorganized thoughts into structured, executable tasks with production-quality implementation plans. This MCP server implements the Sequential Prompting Framework for AI agents.
 
 ## 📋 Simple Installation
 
+### Installing via Smithery
+
+To install Tanuki Sequential Thought for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@AppleJax2/tanukimcp-thought):
+
+```bash
+npx -y @smithery/cli install @AppleJax2/tanukimcp-thought --client claude
+```
+
+### Manual Installation
 Add this to your `.cursor/mcp.json` file:
 
 ```json
