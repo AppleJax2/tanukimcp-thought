@@ -1,0 +1,15 @@
+{
+  "mcpServers": [
+    {
+      "name": "tanuki-sequential-thought",
+      "type": "command",
+      "command": "npm start",
+      "workingDirectory": "/path/to/tanuki-sequential-thought-mcp"
+    },
+    {
+      "name": "tanuki-sequential-thought-http",
+      "type": "url",
+      "url": "http://localhost:3001/sse"
+    }
+  ]
+} 
