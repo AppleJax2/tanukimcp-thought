@@ -2,9 +2,15 @@
 
 Transform disorganized thoughts into structured, executable tasks with production-quality implementation plans. This MCP server implements the Sequential Prompting Framework for AI agents.
 
-## 📋 Simple Installation
+## 📋 Installation
 
-Add this to your `.cursor/mcp.json` file:
+### Prerequisites
+
+- **Node.js 18+** - Required to run the MCP server
+- **[Ollama](https://ollama.ai/)** - Required for local LLM processing
+- **DeepSeek-R1 model** - Required language model (install with `ollama pull deepseek-r1`)
+
+Once you have installed the prerequisites, add this to your `.cursor/mcp.json` file:
 
 ```json
 "tanukimcp-thought": {
@@ -31,7 +37,7 @@ The Sequential Prompting Framework is a structured approach to working with AI a
 brain_dump_organize
 ```
 
-Transform unstructured thoughts into a structured markdown todolist.
+Transform unstructured thoughts into a structured markdown todolist. This tool uses a local LLM to analyze your input and create an organized todolist with logical categories.
 
 ### Phase 2: Enhance & Refine
 
@@ -39,7 +45,7 @@ Transform unstructured thoughts into a structured markdown todolist.
 enhance_todolist
 ```
 
-Add detailed specifications, acceptance criteria, and technical requirements.
+Add detailed specifications, acceptance criteria, and technical requirements to your todolist. The LLM analyzes your existing tasks and enhances them with implementation details.
 
 ### Phase 3: Sequential Task Implementation
 
@@ -49,7 +55,7 @@ plan_task_implementation
 mark_task_complete
 ```
 
-Find, plan, and implement tasks in a logical sequence.
+Find, plan, and implement tasks in a logical sequence. The LLM helps prioritize tasks, create detailed implementation plans, and track progress.
 
 ### Auxiliary Tools
 
@@ -57,7 +63,7 @@ Find, plan, and implement tasks in a logical sequence.
 sequential_thinking
 ```
 
-Break down complex problems with a structured thinking process.
+Break down complex problems with a structured thinking process. This applies a step-by-step analysis approach to complex questions.
 
 ## 🔄 Example Workflow
 
@@ -120,6 +126,27 @@ npx @applejax2/tanukimcp-thought http
 ```
 
 Then connect to `http://localhost:3001/sse`
+
+### Configuration
+
+You can customize the model by creating a `tanuki-config.json` file in your project:
+
+```json
+{
+  "llmModel": "deepseek-r1"
+}
+```
+
+## 🧠 LLM Integration
+
+This MCP uses DeepSeek-R1, a powerful local LLM through Ollama to provide intelligent processing of your thoughts and tasks:
+
+1. DeepSeek-R1 is a state-of-the-art language model that matches or exceeds the performance of many cloud-based models
+2. It analyzes your unstructured thoughts and organizes them into logical categories
+3. It enhances todolist items with detailed specifications and considerations
+4. It prioritizes tasks based on dependencies and logical order
+5. It creates detailed implementation plans for specific tasks
+6. It provides step-by-step thinking on complex problems
 
 ## 🔌 Integration with Other MCP Servers
 

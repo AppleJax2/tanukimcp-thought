@@ -3,6 +3,44 @@ import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
 import { existsSync } from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+// Required model for the tool to function
+const REQUIRED_MODEL = 'deepseek-r1';
+
+/**
+ * Check if Ollama is installed and the required model is available
+ * Exits with an error message if requirements aren't met
+ */
+async function checkOllamaRequirements() {
+  try {
+    console.log('Checking for Ollama installation...');
+    await execAsync('ollama --version');
+    
+    console.log(`Checking for ${REQUIRED_MODEL} model...`);
+    const { stdout } = await execAsync('ollama list');
+    
+    if (!stdout.includes(REQUIRED_MODEL)) {
+      console.error(`ERROR: Required model "${REQUIRED_MODEL}" not found.`);
+      console.error(`Please run: ollama pull ${REQUIRED_MODEL}`);
+      process.exit(1);
+    }
+    
+    console.log('✅ Ollama and required model verified!');
+  } catch (error) {
+    console.error('\n=== TANUKI SEQUENTIAL THOUGHT MCP REQUIREMENTS ===');
+    console.error('ERROR: Ollama is required for this tool to function.');
+    console.error('Please install Ollama from https://ollama.ai/');
+    console.error(`Then run: ollama pull ${REQUIRED_MODEL}`);
+    console.error('\nFor development purposes only, you can bypass this check by modifying');
+    console.error('the checkOllamaRequirements function in src/server.ts to return without error.');
+    console.error('======================================================\n');
+    process.exit(1);
+  }
+}
 
 /**
  * Interface to represent a todolist item
@@ -12,6 +50,37 @@ interface TodoItem {
   checked: boolean;
   level: number;
   children: TodoItem[];
+}
+
+/**
+ * Task category with items
+ */
+interface TaskCategory {
+  name: string;
+  items: string[];
+}
+
+/**
+ * Configuration options
+ */
+interface Config {
+  llmModel: string;
+}
+
+// Default configuration
+const defaultConfig: Config = {
+  llmModel: REQUIRED_MODEL
+};
+
+// Try to load user config
+let userConfig: Config = defaultConfig;
+try {
+  if (existsSync('tanuki-config.json')) {
+    const configFile = fs.readFile('tanuki-config.json', 'utf-8');
+    userConfig = JSON.parse(await configFile);
+  }
+} catch (error) {
+  console.error('Error loading config:', error);
 }
 
 /**
@@ -39,6 +108,12 @@ const fileExists = async (filePath: string): Promise<boolean> => {
  * Implements tools for the Sequential Prompting Framework
  */
 export function createTanukiServer() {
+  // First check for Ollama and required model
+  checkOllamaRequirements().catch(error => {
+    console.error('Failed to verify Ollama requirements:', error);
+    process.exit(1);
+  });
+  
   // Create a server with required options
   const server = new FastMCP({
     name: 'tanukimcp-thought',
@@ -67,9 +142,8 @@ export function createTanukiServer() {
           return 'Error: Unstructured thoughts cannot be empty.';
         }
         
-        // Create a basic structured todolist
-        // In a real implementation, this would use AI to transform the thoughts
-        const todolist = `# ${project_description}\n\n## Project Todolist\n\n### Core Components\n- [ ] Component 1\n  - Core functionality description\n  - Integration points with other components\n  - Error-handling considerations\n  - Performance considerations\n- [ ] Component 2\n  - Core functionality description\n  - Integration points with other components\n  - Error-handling considerations\n  - Performance considerations\n\n### Implementation Tasks\n- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n`;
+        // Generate todolist with LLM
+        const todolist = await generateTodoWithLLM(project_description, unstructured_thoughts);
         
         // Ensure the output directory exists
         const dir = path.dirname(output_file);
@@ -87,6 +161,144 @@ export function createTanukiServer() {
     },
   });
 
+  // LLM-based todo generation
+  async function generateTodoWithLLM(projectDescription: string, thoughts: string): Promise<string> {
+    try {
+      const prompt = `
+      Your task is to analyze the following unstructured thoughts about a project and organize them into a clear, structured todolist.
+      
+      Project: ${projectDescription}
+      
+      Unstructured thoughts:
+      ${thoughts}
+      
+      Create a markdown todolist that:
+      1. Starts with a heading showing the project name
+      2. Organizes tasks into logical categories based on the content
+      3. Uses proper Markdown formatting with checkboxes (- [ ] Task)
+      4. Includes EVERY thought from the input, transformed into clear, actionable tasks
+      5. Is comprehensive and detailed
+      
+      Return ONLY the markdown todolist without any other text.
+      `;
+      
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      
+      // Clean up the output to ensure it's valid markdown
+      let output = stdout.trim();
+      
+      // If the output doesn't start with a markdown heading, add one
+      if (!output.startsWith('# ')) {
+        output = `# ${projectDescription}\n\n${output}`;
+      }
+      
+      return output;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`LLM generation failed: ${errorMessage}`);
+    }
+  }
+  
+  // Rule-based todo generation
+  function generateTodoWithRules(projectDescription: string, thoughts: string): string {
+    // Extract lines and clean them up
+    const lines = thoughts
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    
+    // Process lines to extract tasks
+    const tasks: string[] = [];
+    for (const line of lines) {
+      // Remove bullet points, dashes, etc.
+      let task = line
+        .replace(/^[-•*]\s*/, '')  // Remove bullet points
+        .replace(/^\d+[.)]\s*/, '') // Remove numbered list markers
+        .trim();
+      
+      if (task) {
+        tasks.push(task);
+      }
+    }
+    
+    // Categorize tasks based on keywords
+    const categories: TaskCategory[] = categorizeTasksByKeywords(tasks);
+    
+    // Generate the todolist markdown
+    let todolist = `# ${projectDescription}\n\n## Project Todolist\n\n`;
+    
+    // Add categories and tasks
+    categories.forEach(category => {
+      todolist += `### ${category.name}\n`;
+      category.items.forEach(item => {
+        todolist += `- [ ] ${item}\n`;
+      });
+      todolist += '\n';
+    });
+    
+    // Add any uncategorized tasks
+    const uncategorizedTasks = tasks.filter(task => 
+      !categories.some(category => 
+        category.items.includes(task)
+      )
+    );
+    
+    if (uncategorizedTasks.length > 0) {
+      todolist += `### Other Tasks\n`;
+      uncategorizedTasks.forEach(task => {
+        todolist += `- [ ] ${task}\n`;
+      });
+      todolist += '\n';
+    }
+    
+    return todolist;
+  }
+  
+  // Categorize tasks based on keywords
+  function categorizeTasksByKeywords(tasks: string[]): TaskCategory[] {
+    const categories: TaskCategory[] = [];
+    
+    // Define categories and their keywords
+    const categoryKeywords = [
+      { name: 'Frontend/UI', keywords: ['ui', 'interface', 'frontend', 'display', 'view', 'component', 'screen', 'responsive', 'mobile', 'design', 'layout', 'style', 'css', 'html'] },
+      { name: 'Backend/API', keywords: ['api', 'backend', 'server', 'endpoint', 'route', 'controller', 'service', 'database', 'query', 'model', 'schema'] },
+      { name: 'Authentication', keywords: ['auth', 'authentication', 'login', 'register', 'user', 'permission', 'role', 'access', 'security', 'password', 'token', 'jwt'] },
+      { name: 'Data Management', keywords: ['data', 'database', 'storage', 'persist', 'model', 'entity', 'record', 'table', 'document', 'collection'] },
+      { name: 'Testing', keywords: ['test', 'testing', 'unit', 'integration', 'e2e', 'end-to-end', 'qa', 'quality', 'assert', 'expect', 'mock', 'stub', 'coverage'] },
+      { name: 'Deployment', keywords: ['deploy', 'deployment', 'ci', 'cd', 'pipeline', 'build', 'release', 'server', 'host', 'container', 'docker', 'kubernetes'] },
+    ];
+    
+    // Initialize categories
+    categoryKeywords.forEach(cat => {
+      categories.push({
+        name: cat.name,
+        items: []
+      });
+    });
+    
+    // Assign tasks to categories based on keywords
+    tasks.forEach(task => {
+      const taskLower = task.toLowerCase();
+      let assigned = false;
+      
+      for (const category of categories) {
+        const catIndex = categoryKeywords.findIndex(c => c.name === category.name);
+        if (catIndex !== -1) {
+          const keywords = categoryKeywords[catIndex].keywords;
+          
+          if (keywords.some(keyword => taskLower.includes(keyword))) {
+            category.items.push(task);
+            assigned = true;
+            break;  // Assign to first matching category only
+          }
+        }
+      }
+    });
+    
+    // Filter out empty categories
+    return categories.filter(category => category.items.length > 0);
+  }
+
   // Phase 2: Enhance & Refine
   server.addTool({
     name: 'enhance_todolist',
@@ -97,7 +309,7 @@ export function createTanukiServer() {
     }),
     execute: async (args) => {
       try {
-        const { input_file, output_file } = args;
+        const { input_file, output_file = input_file } = args;
         
         // Validate file exists
         if (!(await fileExists(input_file))) {
@@ -107,45 +319,166 @@ export function createTanukiServer() {
         // Read the existing todolist
         const existingTodolist = await fs.readFile(input_file, 'utf-8');
         
-        // In a real implementation, this would use AI to enhance the todolist
-        // For now, we'll add placeholder enhancements
-        const enhancedTodolist = existingTodolist + `
-## Enhancement Additions
-
-### Integration & API Standards
-- [ ] Define API response formats
-- [ ] Establish error handling patterns
-- [ ] Document integration points
-
-### Performance & Security Considerations
-- [ ] Implement rate limiting
-- [ ] Add input validation
-- [ ] Consider caching strategies
-
-### Data Models & State Management
-- [ ] Define core data models
-- [ ] Document state transitions
-- [ ] Implement data validation
-`;
-        
-        // Determine output file
-        const targetFile = output_file || input_file;
+        // Generate enhanced todolist with LLM
+        const enhancedTodolist = await enhanceTodoWithLLM(existingTodolist);
         
         // Ensure the output directory exists
-        const dir = path.dirname(targetFile);
+        const dir = path.dirname(output_file);
         if (dir !== '.' && !existsSync(dir)) {
           await fs.mkdir(dir, { recursive: true });
         }
         
-        // Write the enhanced todolist
-        await fs.writeFile(targetFile, enhancedTodolist, 'utf-8');
+        // Write the enhanced todolist to file
+        await fs.writeFile(output_file, enhancedTodolist, 'utf-8');
         
-        return `Successfully enhanced todolist and saved to "${targetFile}".\n\n${enhancedTodolist}`;
+        return `Successfully enhanced todolist and saved to "${output_file}".\n\n${enhancedTodolist}`;
       } catch (error) {
         return handleError(error, 'Failed to enhance todolist');
       }
     },
   });
+  
+  // LLM-based todolist enhancement
+  async function enhanceTodoWithLLM(existingTodolist: string): Promise<string> {
+    try {
+      const prompt = `
+      Your task is to enhance and improve this todolist with more specific details, acceptance criteria, and technical requirements.
+      
+      Original todolist:
+      ${existingTodolist}
+      
+      For each existing task:
+      1. Add 2-3 specific acceptance criteria as subtasks
+      2. Add relevant technical requirements and implementation details
+      3. Consider edge cases and error handling
+      
+      Also, add any missing categories that would be important for a complete project, such as:
+      - Testing & QA
+      - Deployment
+      - Security
+      - Documentation
+      
+      Preserve all existing content and structure. Add to it, don't remove anything.
+      Return the complete enhanced markdown todolist.
+      `;
+      
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      
+      // Clean up the output and ensure it's valid markdown
+      let output = stdout.trim();
+      
+      // If the output doesn't seem like proper markdown, use the rule-based fallback
+      if (!output.includes('# ') && !output.includes('- [ ]')) {
+        console.warn('Warning: LLM output was not valid markdown, using rule-based enhancement as fallback');
+        return enhanceTodoWithRules(existingTodolist);
+      }
+      
+      return output;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`Warning: LLM enhancement failed: ${errorMessage}, using rule-based fallback`);
+      return enhanceTodoWithRules(existingTodolist);
+    }
+  }
+  
+  // Rule-based todolist enhancement
+  function enhanceTodoWithRules(existingTodolist: string): string {
+    // Parse the existing todolist
+    const lines = existingTodolist.split('\n');
+    
+    // Extract section titles and tasks
+    const sections: {[key: string]: string[]} = {};
+    let currentSection = 'General';
+    
+    lines.forEach(line => {
+      const trimmedLine = line.trim();
+      
+      // Check if this is a heading
+      if (trimmedLine.startsWith('###')) {
+        currentSection = trimmedLine.replace(/^###\s*/, '').trim();
+        if (!sections[currentSection]) {
+          sections[currentSection] = [];
+        }
+      } 
+      // Check if this is a task
+      else if (trimmedLine.startsWith('- [ ]')) {
+        const task = trimmedLine.replace(/^-\s*\[\s*\]\s*/, '').trim();
+        if (task && !sections[currentSection]) {
+          sections[currentSection] = [];
+        }
+        if (task) {
+          sections[currentSection].push(task);
+        }
+      }
+      // Add other lines as is
+      else if (trimmedLine && !trimmedLine.startsWith('#')) {
+        if (!sections[currentSection]) {
+          sections[currentSection] = [];
+        }
+        sections[currentSection].push(line);
+      }
+    });
+    
+    // Start with the original todolist
+    let enhancedTodolist = existingTodolist;
+    
+    // Only add enhancement sections if they don't already exist
+    if (!enhancedTodolist.includes('## Enhancement Additions')) {
+      enhancedTodolist += '\n\n## Enhancement Additions\n\n';
+      
+      // Add dynamic enhancements based on tasks found
+      if (Object.keys(sections).some(section => 
+        ['Frontend', 'UI', 'Interface'].some(keyword => 
+          section.includes(keyword)
+        )
+      )) {
+        enhancedTodolist += '### UI/UX Enhancement Specifications\n';
+        enhancedTodolist += '- [ ] Define a consistent design system (colors, typography, spacing)\n';
+        enhancedTodolist += '- [ ] Create responsive layouts for all screen sizes\n';
+        enhancedTodolist += '- [ ] Implement accessibility standards (WCAG 2.1)\n';
+        enhancedTodolist += '- [ ] Design loading states and error handling UI\n\n';
+      }
+      
+      if (Object.keys(sections).some(section => 
+        ['API', 'Backend', 'Server', 'Data'].some(keyword => 
+          section.includes(keyword)
+        )
+      )) {
+        enhancedTodolist += '### API & Data Layer Specifications\n';
+        enhancedTodolist += '- [ ] Document API endpoints and request/response formats\n';
+        enhancedTodolist += '- [ ] Implement proper error handling and status codes\n';
+        enhancedTodolist += '- [ ] Design efficient data retrieval patterns\n';
+        enhancedTodolist += '- [ ] Add validation for all inputs\n\n';
+      }
+      
+      if (Object.keys(sections).some(section => 
+        ['Auth', 'User', 'Login', 'Register'].some(keyword => 
+          section.includes(keyword)
+        )
+      )) {
+        enhancedTodolist += '### Authentication & Security Specifications\n';
+        enhancedTodolist += '- [ ] Implement secure password storage\n';
+        enhancedTodolist += '- [ ] Set up JWT or session-based authentication\n';
+        enhancedTodolist += '- [ ] Add role-based access control\n';
+        enhancedTodolist += '- [ ] Protect against common security vulnerabilities\n\n';
+      }
+      
+      // Add standard sections that should be part of any project
+      enhancedTodolist += '### Testing & Quality Assurance\n';
+      enhancedTodolist += '- [ ] Write unit tests for core functionality\n';
+      enhancedTodolist += '- [ ] Implement integration tests for key workflows\n';
+      enhancedTodolist += '- [ ] Set up continuous integration pipeline\n';
+      enhancedTodolist += '- [ ] Create test documentation\n\n';
+      
+      enhancedTodolist += '### Deployment & Operations\n';
+      enhancedTodolist += '- [ ] Configure deployment environments\n';
+      enhancedTodolist += '- [ ] Set up monitoring and logging\n';
+      enhancedTodolist += '- [ ] Document operational procedures\n';
+      enhancedTodolist += '- [ ] Plan for scaling and maintenance\n';
+    }
+    
+    return enhancedTodolist;
+  }
 
   // Phase 3: Sequential Task Implementation - Find Next Task
   server.addTool({
@@ -166,21 +499,66 @@ export function createTanukiServer() {
         // Read the todolist
         const todolist = await fs.readFile(todolist_file, 'utf-8');
         
-        // In a real implementation, an AI would prioritize which task to do next
-        // For now, simply find the first unchecked task
+        // Check if there are any unchecked tasks
         const uncheckedTaskRegex = /- \[ \] (.+)$/m;
-        const match = todolist.match(uncheckedTaskRegex);
-        
-        if (match && match[1]) {
-          return `Next task to implement: "${match[1]}"\n\nContext from todolist:\n${todolist}`;
-        } else {
+        if (!uncheckedTaskRegex.test(todolist)) {
           return `No unchecked tasks found in the todolist. All tasks appear to be completed.\n\nTodolist content:\n${todolist}`;
         }
+        
+        // Use LLM to find and prioritize the next task
+        const nextTask = await findNextTaskWithLLM(todolist);
+        return nextTask;
       } catch (error) {
         return handleError(error, 'Failed to find next task');
       }
     },
   });
+  
+  // LLM-based task prioritization
+  async function findNextTaskWithLLM(todolist: string): Promise<string> {
+    try {
+      const prompt = `
+      You are a project management assistant. Given the following todolist, identify the most logical next task to implement.
+      
+      Todolist:
+      ${todolist}
+      
+      Find an uncompleted task (marked with "- [ ]") that should be implemented next, based on:
+      1. Dependencies (tasks that others depend on should be done first)
+      2. Logical order (setup/foundation tasks before features)
+      3. Complexity (consider starting with simpler tasks)
+      
+      Return ONLY the text of the single next task to implement, exactly as it appears in the todolist, without the checkbox or additional explanation.
+      `;
+      
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      
+      // Clean up the output
+      let nextTask = stdout.trim();
+      
+      // Remove any markdown formatting the LLM might have included
+      nextTask = nextTask.replace(/^- \[[ x]\]\s*/, '');
+      
+      // Verify the task exists in the todolist
+      if (!todolist.includes(nextTask)) {
+        // Fall back to simpler method if LLM output doesn't match a task
+        console.warn('Warning: LLM suggested a task that does not exist in the todolist');
+        const match = todolist.match(/- \[ \] (.+)$/m);
+        nextTask = match ? match[1] : "No specific task identified";
+      }
+      
+      return `Next task to implement: "${nextTask}"\n\nContext from todolist:\n${todolist}`;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`Warning: LLM task prioritization failed: ${errorMessage}, using simple fallback`);
+      
+      // Simple fallback: find first unchecked task
+      const match = todolist.match(/- \[ \] (.+)$/m);
+      const nextTask = match ? match[1] : "No specific task identified";
+      
+      return `Next task to implement: "${nextTask}"\n\nContext from todolist:\n${todolist}`;
+    }
+  }
 
   // Phase 3: Sequential Task Implementation - Plan Task
   server.addTool({
@@ -209,16 +587,65 @@ export function createTanukiServer() {
         
         // Check if the task exists in the todolist
         if (!todolist.includes(task)) {
-          return `Warning: The specified task "${task}" was not found in the todolist. This plan may lack proper context.\n\n` + createImplementationPlan(task);
+          return `Warning: The specified task "${task}" was not found in the todolist. This plan may lack proper context.\n\n` + createImplementationPlanFallback(task);
         }
         
-        // In a real implementation, this would use AI to generate a detailed plan
-        return createImplementationPlan(task);
+        // Generate implementation plan with LLM
+        const plan = await createImplementationPlanWithLLM(task, todolist);
+        return plan;
       } catch (error) {
         return handleError(error, 'Failed to create implementation plan');
       }
     },
   });
+  
+  // LLM-based implementation planning
+  async function createImplementationPlanWithLLM(task: string, todolistContext: string): Promise<string> {
+    try {
+      const prompt = `
+      You are a senior software engineer creating an implementation plan for a task in a project.
+      
+      Task to implement:
+      ${task}
+      
+      Project Context (full todolist):
+      ${todolistContext}
+      
+      Create a detailed implementation plan that includes:
+      1. A clear approach with step-by-step implementation strategy
+      2. Architecture considerations and design patterns to use
+      3. Key dependencies and components needed
+      4. Potential integration points with other systems
+      5. Error handling strategies and edge cases to consider
+      6. Testing approach with specific test scenarios
+      7. Performance considerations and optimizations
+      
+      Format your response as a comprehensive markdown implementation plan.
+      `;
+      
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      
+      // Clean up the output
+      let plan = stdout.trim();
+      
+      // If plan doesn't have a heading, add one
+      if (!plan.startsWith('#')) {
+        plan = `## Implementation Plan for: "${task}"\n\n${plan}`;
+      }
+      
+      // If for some reason the LLM doesn't produce a good plan, use the fallback
+      if (plan.length < 100) {
+        console.warn('Warning: LLM generated a very short implementation plan, using fallback');
+        return createImplementationPlanFallback(task);
+      }
+      
+      return plan;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`Warning: LLM planning failed: ${errorMessage}, using fallback plan`);
+      return createImplementationPlanFallback(task);
+    }
+  }
 
   // Phase 3: Sequential Task Implementation - Mark Task Complete
   server.addTool({
@@ -285,24 +712,73 @@ export function createTanukiServer() {
           return 'Error: Steps must be between 1 and 10.';
         }
         
-        // In a real implementation, this would use AI to apply sequential thinking
-        // For now, generate a placeholder thinking process
-        let result = `# Sequential Thinking Analysis: ${problem}\n\n`;
-        
-        for (let i = 1; i <= steps; i++) {
-          result += `## Step ${i}: ${getThinkingStepTitle(i)}\n`;
-          result += getThinkingStepContent(i, problem) + '\n\n';
-        }
-        
-        result += `## Conclusion\nThis sequential analysis has broken down the problem "${problem}" into manageable components. The insights from each step build upon each other, creating a comprehensive understanding and approach. This structured thinking approach helps ensure all aspects are considered methodically.`;
-        
-        return result;
+        // Generate sequential thinking analysis with LLM
+        const analysis = await generateSequentialThinkingWithLLM(problem, steps);
+        return analysis;
       } catch (error) {
         return handleError(error, 'Failed to apply sequential thinking');
       }
     },
   });
   
+  // LLM-based sequential thinking
+  async function generateSequentialThinkingWithLLM(problem: string, steps: number): Promise<string> {
+    try {
+      const prompt = `
+      You are a methodical problem-solver using sequential thinking to break down complex problems step by step.
+      
+      Problem to analyze:
+      ${problem}
+      
+      Break down this problem into ${steps} sequential thinking steps where each step builds on previous insights.
+      
+      For each of the ${steps} steps:
+      1. Create a clear heading that describes the thinking focus for that step
+      2. Provide substantive analysis for each step (at least 100 words per step)
+      3. Ensure each step builds logically on the previous steps
+      4. End with a conclusion that summarizes the key insights
+      
+      Format your response as a comprehensive markdown document with proper headings and structure.
+      `;
+      
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      
+      // Clean up the output
+      let analysis = stdout.trim();
+      
+      // If analysis doesn't have a heading, add one
+      if (!analysis.startsWith('#')) {
+        analysis = `# Sequential Thinking Analysis: ${problem}\n\n${analysis}`;
+      }
+      
+      // If for some reason the LLM doesn't produce a good analysis, use the fallback
+      if (analysis.length < steps * 100) {
+        console.warn('Warning: LLM generated a very short sequential thinking analysis, using fallback');
+        return generateSequentialThinkingFallback(problem, steps);
+      }
+      
+      return analysis;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`Warning: LLM sequential thinking failed: ${errorMessage}, using fallback analysis`);
+      return generateSequentialThinkingFallback(problem, steps);
+    }
+  }
+  
+  // Fallback sequential thinking generator
+  function generateSequentialThinkingFallback(problem: string, steps: number): string {
+    let result = `# Sequential Thinking Analysis: ${problem}\n\n`;
+    
+    for (let i = 1; i <= steps; i++) {
+      result += `## Step ${i}: ${getThinkingStepTitle(i)}\n`;
+      result += getThinkingStepContent(i, problem) + '\n\n';
+    }
+    
+    result += `## Conclusion\nThis sequential analysis has broken down the problem "${problem}" into manageable components. The insights from each step build upon each other, creating a comprehensive understanding and approach. This structured thinking approach helps ensure all aspects are considered methodically.`;
+    
+    return result;
+  }
+
   return server;
 }
 
@@ -399,4 +875,50 @@ function getThinkingStepContent(step: number, problem: string): string {
   ];
   
   return stepContents[step - 1] || `This is step ${step} of the sequential thinking process for the problem: "${problem}". In this step, we analyze the problem from a new perspective, building on previous insights and moving closer to a comprehensive solution.`;
+}
+
+/**
+ * Helper function to create a fallback implementation plan
+ */
+function createImplementationPlanFallback(task: string): string {
+  return `
+## Implementation Plan for: "${task}"
+
+### Approach
+The implementation will follow a step-by-step approach, breaking down the task into manageable components and addressing each methodically.
+
+### Architecture
+The solution will integrate with existing systems where appropriate while maintaining clean separation of concerns and following SOLID principles.
+
+### Dependencies
+- Primary system components
+- External libraries as needed
+- Documentation and reference materials
+
+### Integration Points
+- User interface components
+- Backend services
+- Data persistence layer
+- Error handling system
+
+### Error Handling
+Comprehensive error detection and recovery mechanisms will be implemented, including:
+- Input validation
+- Exception handling
+- Graceful degradation
+- User feedback mechanisms
+
+### Testing
+Testing will include:
+- Unit tests for core functionality
+- Integration tests for system interactions
+- User acceptance criteria validation
+- Edge case and boundary testing
+
+### Performance Considerations
+- Efficiency of algorithms and data structures
+- Resource utilization monitoring
+- Caching strategies where appropriate
+- Scalability concerns and mitigations
+`;
 } 
