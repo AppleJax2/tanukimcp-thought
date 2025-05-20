@@ -6,18 +6,39 @@ Transform disorganized thoughts into structured, executable tasks with productio
 
 ### Prerequisites
 
-- **Node.js 18+** - Required to run the MCP server
-- **[Ollama](https://ollama.ai/)** - Required for local LLM processing
-- **DeepSeek-R1 model** - Required language model (install with `ollama pull deepseek-r1`)
+1. **Install [Ollama](https://ollama.ai/)**
+   
+   Ollama is required to run language models locally. Download and install from:
+   - **Mac**: [ollama.ai](https://ollama.ai/)
+   - **Linux**: `curl -fsSL https://ollama.ai/install.sh | sh`
+   - **Windows**: [Windows installer](https://ollama.ai/)
 
-Once you have installed the prerequisites, add this to your `.cursor/mcp.json` file:
+2. **Install a compatible language model**
 
-```json
-"tanukimcp-thought": {
-  "command": "npx",
-  "args": ["@applejax2/tanukimcp-thought@latest"]
-}
-```
+   This MCP uses [DeepSeek-R1](https://ollama.com/library/deepseek-r1) by default, but you can configure it to use other reasoning models:
+   
+   ```bash
+   ollama pull deepseek-r1
+   ```
+   
+   Alternative models you can use include:
+   - deepseek-r1 (default, best performance)
+   - llama3.1
+   - qwen3
+   - mistral-small3.1
+   - phi4-reasoning
+   - cogito
+
+3. **Install the MCP Server**
+
+   Go to [smithery.ai/server/@AppleJax2/tanukimcp-thought](https://smithery.ai/server/@AppleJax2/tanukimcp-thought) and use the auto-install command, or manually add this to your `.cursor/mcp.json` file:
+
+   ```json
+   "tanukimcp-thought": {
+     "command": "npx",
+     "args": ["@applejax2/tanukimcp-thought@latest"]
+   }
+   ```
 
 That's it! Your AI agent now has access to the Sequential Prompting Framework tools.
 
@@ -112,30 +133,9 @@ Find, plan, implement, and track tasks in a logical sequence:
    Todolist file: tooltodo.md
    ```
 
-## 🚀 Advanced Installation Options
+## 🚀 Advanced Configuration
 
-### Direct Usage with npx
-
-```bash
-npx @applejax2/tanukimcp-thought
-```
-
-### Global Installation
-
-```bash
-npm install -g @applejax2/tanukimcp-thought
-tanukimcp-thought
-```
-
-### HTTP Server Mode
-
-```bash
-npx @applejax2/tanukimcp-thought http
-```
-
-Then connect to `http://localhost:3001/sse`
-
-### Configuration
+### Customizing the Language Model
 
 You can customize the model by creating a `tanuki-config.json` file in your project:
 
@@ -145,16 +145,17 @@ You can customize the model by creating a `tanuki-config.json` file in your proj
 }
 ```
 
+Replace "deepseek-r1" with any compatible Ollama model you've installed.
+
 ## 🧠 LLM Integration
 
-This MCP uses DeepSeek-R1, a powerful local LLM through Ollama to provide intelligent processing of your thoughts and tasks:
+This MCP uses local language models through Ollama to provide intelligent processing of your thoughts and tasks:
 
-1. DeepSeek-R1 is a state-of-the-art language model that matches or exceeds the performance of many cloud-based models
-2. It analyzes your unstructured thoughts and organizes them into logical categories
-3. It enhances todolist items with detailed specifications and considerations
-4. It prioritizes tasks based on dependencies and logical order
-5. It creates detailed implementation plans for specific tasks
-6. It translates implementation plans into concrete file operations
+1. Your unstructured thoughts are analyzed and organized into logical categories
+2. Todolist items are enhanced with detailed specifications and implementation considerations
+3. Tasks are prioritized based on dependencies and logical order
+4. Implementation plans are created with step-by-step instructions
+5. The task executor translates plans into concrete file operations
 
 ## 🛠️ Task Executor Capabilities
 
@@ -165,208 +166,10 @@ The `task_executor` tool is the final piece of the Sequential Prompting Framewor
 3. **Delete Files** - Remove deprecated or unnecessary files
 4. **Mark Tasks Complete** - Automatically update the todolist when implementation succeeds
 
-This tool works across micro and macro tasks:
-- **Small refactors** - Update specific functions or methods
-- **Component additions** - Create new modules or components
-- **Large-scale refactors** - Restructure multiple files across your codebase
-- **Complete applications** - Build entire projects from scratch
-
-## 🔌 Integration with Other MCP Servers
-
-This MCP server works great alongside:
-
-- **Desktop Commander** - For file and system operations
-- **LotusWisdomMCP** - For deep thinking sessions
-- **Memory Tools** - To maintain context between sessions
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🎓 Based on the Sequential Prompting Framework
 
-The concepts in this MCP server implement the Sequential Prompting Framework methodology for transforming unstructured thoughts into structured, executable tasks with clear implementation plans, turning ideas into functioning code through a logical, stepwise process.
-
-## 🔍 Overview
-
-This MCP server implements the Sequential Prompting Framework, which operates in three distinct phases:
-
-1. **Capture & Organize** - Transform scattered thoughts into a structured todolist
-2. **Enhance & Refine** - Add production-quality details to each task
-3. **Implement Tasks** - Execute one task at a time with clear standards
-
-Each phase is implemented as a set of callable MCP tools that can be used in various AI environments like Cursor, Claude Desktop, or any other platform that supports MCP.
-
-## 📋 Features
-
-- **Brain Dump & Organization** - Transform unstructured thoughts into structured todolists
-- **Task Enhancement** - Add detailed specifications and acceptance criteria to tasks
-- **Sequential Implementation** - Find, plan, and implement tasks in a logical order
-- **Task Execution** - Automatically implement changes with file operations
-- **Local-First** - All processing happens locally, ensuring privacy and control
-- **Standardized Approach** - Consistent formatting and structure across projects
-- **Scale Flexibility** - Works for projects of any size, from small tweaks to full applications
-
-## 🚀 Installation
-
-### Prerequisites
-
-- Node.js 18+ and npm/yarn/pnpm
-
-### Setting Up the Server
-
-1. Clone this repository:
-   ```
-   git clone https://github.com/yourusername/tanuki-sequential-thought-mcp.git
-   cd tanuki-sequential-thought-mcp
-   ```
-
-2. Install dependencies:
-   ```
-   npm install
-   ```
-
-3. Build the project:
-   ```
-   npm run build
-   ```
-
-## 🔧 Running the Server
-
-The MCP server can run in two modes:
-
-### Stdio Mode (Command Line)
-
-This mode is ideal for local use with tools like Cursor IDE:
-
-```
-npm start
-```
-
-For development with auto-reload:
-
-```
-npm run dev
-```
-
-### HTTP Mode (Web)
-
-This mode is useful for sharing the server across different applications:
-
-```
-npm run start:http
-```
-
-For development with auto-reload:
-
-```
-npm run dev:http
-```
-
-By default, the HTTP server runs on port 3001. You can change this by setting the PORT environment variable:
-
-```
-PORT=8080 npm run start:http
-```
-
-## 🔌 Connecting to the Server
-
-### In Cursor IDE
-
-1. Open Cursor and go to Settings (gear icon)
-2. Click on "Features" in the left sidebar
-3. Scroll down to "MCP Servers" section
-4. Click "Add new MCP server"
-5. Enter these details:
-   - Server name: `tanuki-sequential-thought`
-   - For stdio mode:
-     - Type: `command`
-     - Command: The path to your server executable, e.g., `npm start`
-   - For HTTP mode:
-     - Type: `url`
-     - URL: `http://localhost:3001/sse`
-6. Click "Save"
-
-### In Claude Desktop
-
-1. Open Claude Desktop settings
-2. Navigate to the MCP section
-3. Add a new MCP server with:
-   - Name: `tanuki-sequential-thought`
-   - URL: `http://localhost:3001/sse` (for HTTP mode)
-   - Or command path for local execution
-
-### Using mcp.json with Cursor
-
-For a more portable configuration, create an `.cursor/mcp.json` file in your project's root directory:
-
-```json
-{
-  "mcpServers": {
-    "tanuki-sequential-thought": {
-      "command": "npm",
-      "args": [
-        "start"
-      ],
-      "env": {
-        "NODE_ENV": "development"
-      }
-    },
-    "tanuki-sequential-thought-http": {
-      "url": "http://localhost:3001/sse"
-    }
-  }
-}
-```
-
-## 🔄 Workflow Example
-
-Here's a sample workflow using the Sequential Thought MCP tools:
-
-1. **Brain Dump & Organize**:
-   ```
-   I want to organize my thoughts on building a task management app using the brain_dump_organize tool.
-   Project description: "A collaborative task management application for remote teams"
-   Unstructured thoughts: 
-   - User authentication
-   - Task creation, editing, deletion
-   - Task assignment to team members
-   - Due dates and reminders
-   - Team chat functionality
-   - Activity feed
-   - React frontend, Firebase backend
-   - Mobile responsive design
-   ```
-
-2. **Enhance & Refine**:
-   ```
-   Let's enhance the todolist with more detailed specifications using enhance_todolist.
-   The input file is "tooltodo.md".
-   ```
-
-3. **Find Next Task**:
-   ```
-   What task should I work on next? Please use find_next_task.
-   The todolist file is "tooltodo.md".
-   ```
-
-4. **Plan Task Implementation**:
-   ```
-   I want to plan the implementation of "Set up user authentication with Firebase" using plan_task_implementation.
-   The todolist file is "tooltodo.md".
-   ```
-
-5. **Implement Task and Mark Complete**:
-   After implementing the task based on the plan:
-   ```
-   I've completed "Set up user authentication with Firebase". Let's mark it as complete using mark_task_complete.
-   The todolist file is "tooltodo.md".
-   ```
-
-6. Repeat steps 3-5 until all tasks are complete.
-
-## 🙏 Acknowledgements
-
-- Based on the Sequential Prompting Framework
-- Built using the FastMCP framework
-- Inspired by community innovations in the MCP ecosystem 
+The concepts in this MCP server implement the Sequential Prompting Framework methodology for transforming unstructured thoughts into structured, executable tasks with clear implementation plans, turning ideas into functioning code through a logical, stepwise process. 
