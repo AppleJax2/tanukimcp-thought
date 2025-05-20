@@ -29,6 +29,8 @@ The Sequential Prompting Framework is a structured approach to working with AI a
 2. **Enhance & Refine** - Add production-quality details to each task
 3. **Implement Tasks** - Execute one task at a time with clear standards
 
+Each phase builds upon the previous one, creating a workflow that maintains context and ensures high-quality results. This framework is applicable to projects of any scale - from small refactors to building entire applications from scratch.
+
 ## 🛠️ Available Tools
 
 ### Phase 1: Brain Dump & Organization
@@ -53,17 +55,15 @@ Add detailed specifications, acceptance criteria, and technical requirements to 
 find_next_task
 plan_task_implementation
 mark_task_complete
+task_executor
 ```
 
-Find, plan, and implement tasks in a logical sequence. The LLM helps prioritize tasks, create detailed implementation plans, and track progress.
+Find, plan, implement, and track tasks in a logical sequence:
 
-### Auxiliary Tools
-
-```
-sequential_thinking
-```
-
-Break down complex problems with a structured thinking process. This applies a step-by-step analysis approach to complex questions.
+- **find_next_task** - Identifies the most logical next task to implement based on dependencies
+- **plan_task_implementation** - Creates a detailed implementation plan for a specific task
+- **task_executor** - Actually implements the task by performing the necessary file operations
+- **mark_task_complete** - Updates the todolist to mark a task as complete
 
 ## 🔄 Example Workflow
 
@@ -97,7 +97,15 @@ Break down complex problems with a structured thinking process. This applies a s
    Todolist file: tooltodo.md
    ```
 
-5. **Mark task complete**:
+5. **Execute the task**:
+   ```
+   Execute the planned task using task_executor.
+   Task: Set up authentication
+   Todolist file: tooltodo.md
+   Target directory: ./src
+   ```
+
+6. **Mark task complete** (optional, as task_executor does this automatically on success):
    ```
    I've completed "Set up authentication". Mark it as complete using mark_task_complete.
    Task: Set up authentication
@@ -146,7 +154,22 @@ This MCP uses DeepSeek-R1, a powerful local LLM through Ollama to provide intell
 3. It enhances todolist items with detailed specifications and considerations
 4. It prioritizes tasks based on dependencies and logical order
 5. It creates detailed implementation plans for specific tasks
-6. It provides step-by-step thinking on complex problems
+6. It translates implementation plans into concrete file operations
+
+## 🛠️ Task Executor Capabilities
+
+The `task_executor` tool is the final piece of the Sequential Prompting Framework, turning plans into real implementations. It can:
+
+1. **Create New Files** - Generate new code files, configurations, or documentation
+2. **Edit Existing Files** - Modify existing code with surgical precision
+3. **Delete Files** - Remove deprecated or unnecessary files
+4. **Mark Tasks Complete** - Automatically update the todolist when implementation succeeds
+
+This tool works across micro and macro tasks:
+- **Small refactors** - Update specific functions or methods
+- **Component additions** - Create new modules or components
+- **Large-scale refactors** - Restructure multiple files across your codebase
+- **Complete applications** - Build entire projects from scratch
 
 ## 🔌 Integration with Other MCP Servers
 
@@ -162,7 +185,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🎓 Based on the Sequential Prompting Framework
 
-The concepts in this MCP server implement the Sequential Prompting Framework methodology for transforming unstructured thoughts into structured, executable tasks with clear implementation plans.
+The concepts in this MCP server implement the Sequential Prompting Framework methodology for transforming unstructured thoughts into structured, executable tasks with clear implementation plans, turning ideas into functioning code through a logical, stepwise process.
 
 ## 🔍 Overview
 
@@ -179,9 +202,10 @@ Each phase is implemented as a set of callable MCP tools that can be used in var
 - **Brain Dump & Organization** - Transform unstructured thoughts into structured todolists
 - **Task Enhancement** - Add detailed specifications and acceptance criteria to tasks
 - **Sequential Implementation** - Find, plan, and implement tasks in a logical order
-- **Sequential Thinking** - Break down complex problems using structured thinking
+- **Task Execution** - Automatically implement changes with file operations
 - **Local-First** - All processing happens locally, ensuring privacy and control
 - **Standardized Approach** - Consistent formatting and structure across projects
+- **Scale Flexibility** - Works for projects of any size, from small tweaks to full applications
 
 ## 🚀 Installation
 

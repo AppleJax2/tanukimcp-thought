@@ -713,25 +713,28 @@ export function createTanukiServer() {
     },
   });
 
-  // Auxiliary Tool: Sequential Thinking Process
+  // Add the new task_executor tool
   server.addTool({
-    name: 'sequential_thinking',
-    description: 'Apply the sequential thinking process to break down a complex problem.',
+    name: 'task_executor',
+    description: 'Execute a planned task by implementing the necessary file operations based on the implementation plan.',
     parameters: z.object({
-      problem: z.string().describe('The complex problem or question to analyze'),
-      steps: z.number().optional().describe('Number of thinking steps to perform (default: 3)'),
+      task: z.string().describe('The task to implement'),
+      todolist_file: z.string().describe('Path to the todolist file containing the task'),
+      implementation_plan: z.string().optional().describe('Optional implementation plan for the task. If not provided, a plan will be generated.'),
+      target_directory: z.string().optional().describe('Optional target directory for file operations. Defaults to current directory.'),
     }),
     execute: async (args) => {
       try {
-        const { problem, steps = 3 } = args;
+        const { task, todolist_file, implementation_plan, target_directory = '.' } = args;
         
         // Validate inputs
-        if (!problem.trim()) {
-          return 'Error: Problem description cannot be empty.';
+        if (!task.trim()) {
+          return 'Error: Task description cannot be empty.';
         }
         
-        if (steps < 1 || steps > 10) {
-          return 'Error: Steps must be between 1 and 10.';
+        // Validate file exists
+        if (!(await fileExists(todolist_file))) {
+          return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
         }
         
         // Check Ollama requirements only when the tool is called
@@ -742,71 +745,206 @@ export function createTanukiServer() {
           return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
         }
         
-        // Generate sequential thinking analysis with LLM
-        const analysis = await generateSequentialThinkingWithLLM(problem, steps);
-        return analysis;
+        // Read the todolist for context
+        const todolist = await fs.readFile(todolist_file, 'utf-8');
+        
+        // If implementation plan not provided, generate one
+        let executionPlan = implementation_plan;
+        if (!executionPlan) {
+          console.log(`Generating implementation plan for task: ${task}`);
+          executionPlan = await createImplementationPlanWithLLM(task, todolist);
+        }
+        
+        // Execute the implementation plan
+        console.log(`Executing plan for task: ${task}`);
+        const executionResult = await executeImplementationPlan(task, executionPlan, target_directory);
+        
+        // If execution was successful, mark task as complete
+        if (executionResult.success) {
+          // Create a regex to find the exact task
+          const taskRegex = new RegExp(`- \\[ \\] ${task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+          const updatedTodolist = todolist.replace(taskRegex, `- [x] ${task}`);
+          
+          // Check if any replacements were made
+          if (todolist !== updatedTodolist) {
+            // Write the updated todolist
+            await fs.writeFile(todolist_file, updatedTodolist, 'utf-8');
+            
+            return `Task "${task}" has been successfully implemented and marked as complete.\n\n` +
+                   `Implementation Summary:\n${executionResult.summary}\n\n` +
+                   `Updated todolist:\n${updatedTodolist}`;
+          }
+        }
+        
+        return `Task execution completed with ${executionResult.success ? 'success' : 'issues'}.\n\n` +
+               `Implementation Summary:\n${executionResult.summary}`;
       } catch (error) {
-        return handleError(error, 'Failed to apply sequential thinking');
+        return handleError(error, 'Failed to execute task implementation');
       }
     },
   });
   
-  // LLM-based sequential thinking
-  async function generateSequentialThinkingWithLLM(problem: string, steps: number): Promise<string> {
+  // Implementation plan execution
+  async function executeImplementationPlan(task: string, plan: string, targetDir: string): Promise<{success: boolean, summary: string}> {
     try {
+      // Parse the implementation plan to extract actions
+      const actions = await parsePlanIntoActions(plan, task);
+      
+      // Execute each action in sequence
+      const executionResults = [];
+      let allSuccessful = true;
+      
+      for (const action of actions) {
+        console.log(`Executing action: ${action.type} - ${action.description}`);
+        try {
+          let result;
+          
+          switch (action.type) {
+            case 'create_file':
+              if (action.path && action.content) {
+                const filePath = path.join(targetDir, action.path);
+                const dir = path.dirname(filePath);
+                
+                // Ensure directory exists
+                if (!existsSync(dir)) {
+                  await fs.mkdir(dir, { recursive: true });
+                }
+                
+                await fs.writeFile(filePath, action.content, 'utf-8');
+                result = `Created file: ${filePath}`;
+              } else {
+                throw new Error('Missing path or content for create_file action');
+              }
+              break;
+              
+            case 'edit_file':
+              if (action.path && action.changes) {
+                const filePath = path.join(targetDir, action.path);
+                
+                // Check if file exists
+                if (await fileExists(filePath)) {
+                  const currentContent = await fs.readFile(filePath, 'utf-8');
+                  let newContent = currentContent;
+                  
+                  // Apply each change
+                  for (const change of action.changes) {
+                    if (change.type === 'replace' && change.old && change.new) {
+                      newContent = newContent.replace(change.old, change.new);
+                    } else if (change.type === 'append' && change.content) {
+                      newContent += change.content;
+                    } else if (change.type === 'prepend' && change.content) {
+                      newContent = change.content + newContent;
+                    } else if (change.type === 'insert_at_line' && change.line !== undefined && change.content) {
+                      const lines = newContent.split('\n');
+                      if (change.line >= 0 && change.line <= lines.length) {
+                        lines.splice(change.line, 0, change.content);
+                        newContent = lines.join('\n');
+                      }
+                    }
+                  }
+                  
+                  await fs.writeFile(filePath, newContent, 'utf-8');
+                  result = `Updated file: ${filePath}`;
+                } else {
+                  throw new Error(`File not found: ${filePath}`);
+                }
+              } else {
+                throw new Error('Missing path or changes for edit_file action');
+              }
+              break;
+              
+            case 'delete_file':
+              if (action.path) {
+                const filePath = path.join(targetDir, action.path);
+                if (await fileExists(filePath)) {
+                  await fs.unlink(filePath);
+                  result = `Deleted file: ${filePath}`;
+                } else {
+                  result = `File not found, skipping deletion: ${filePath}`;
+                }
+              } else {
+                throw new Error('Missing path for delete_file action');
+              }
+              break;
+              
+            default:
+              result = `Unsupported action type: ${action.type}`;
+              allSuccessful = false;
+          }
+          
+          executionResults.push({ success: true, action, result });
+        } catch (error) {
+          executionResults.push({ success: false, action, error: error instanceof Error ? error.message : String(error) });
+          allSuccessful = false;
+        }
+      }
+      
+      // Generate a summary of all actions
+      const summary = executionResults.map(r => 
+        r.success ? `✅ ${r.action.type}: ${r.result}` : `❌ ${r.action.type} failed: ${r.error}`
+      ).join('\n');
+      
+      return { success: allSuccessful, summary };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { 
+        success: false, 
+        summary: `Failed to execute implementation plan: ${errorMessage}`
+      };
+    }
+  }
+  
+  // Helper function to parse the implementation plan into executable actions
+  async function parsePlanIntoActions(plan: string, task: string): Promise<any[]> {
+    try {
+      // Use the LLM to parse the plan into structured actions
       const prompt = `
-      You are a methodical problem-solver using sequential thinking to break down complex problems step by step.
+      You are a specialized AI that converts implementation plans into structured, executable actions.
       
-      Problem to analyze:
-      ${problem}
+      Given the following implementation plan for the task "${task}", extract a JSON array of execution steps
+      that a task executor can follow to implement the changes. Each action should include:
       
-      Break down this problem into ${steps} sequential thinking steps where each step builds on previous insights.
+      1. type: The action type (create_file, edit_file, delete_file)
+      2. description: A brief description of what this action does
+      3. Additional parameters based on the action type:
+        - create_file: path, content
+        - edit_file: path, changes (array of change objects with type, and parameters)
+        - delete_file: path
       
-      For each of the ${steps} steps:
-      1. Create a clear heading that describes the thinking focus for that step
-      2. Provide substantive analysis for each step (at least 100 words per step)
-      3. Ensure each step builds logically on the previous steps
-      4. End with a conclusion that summarizes the key insights
+      For edit_file actions, the changes can be:
+        - replace: old (string to replace), new (replacement string)
+        - append: content (string to append)
+        - prepend: content (string to prepend)
+        - insert_at_line: line (line number), content (string to insert)
       
-      Format your response as a comprehensive markdown document with proper headings and structure.
+      Implementation Plan:
+      ${plan}
+      
+      Return ONLY a valid JSON array of actions, with no explanation or other text.
       `;
       
       const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
       
-      // Clean up the output
-      let analysis = stdout.trim();
-      
-      // If analysis doesn't have a heading, add one
-      if (!analysis.startsWith('#')) {
-        analysis = `# Sequential Thinking Analysis: ${problem}\n\n${analysis}`;
+      // Extract JSON from the response
+      const jsonMatch = stdout.match(/\[.*\]/s);
+      if (!jsonMatch) {
+        throw new Error("Could not extract JSON actions from LLM response");
       }
       
-      // If for some reason the LLM doesn't produce a good analysis, use the fallback
-      if (analysis.length < steps * 100) {
-        console.warn('Warning: LLM generated a very short sequential thinking analysis, using fallback');
-        return generateSequentialThinkingFallback(problem, steps);
-      }
-      
-      return analysis;
+      const actionsJson = jsonMatch[0];
+      return JSON.parse(actionsJson);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.warn(`Warning: LLM sequential thinking failed: ${errorMessage}, using fallback analysis`);
-      return generateSequentialThinkingFallback(problem, steps);
+      console.error("Error parsing plan into actions:", error);
+      // Return a minimal set of actions based on the plan without LLM parsing
+      return [
+        {
+          type: 'create_file',
+          description: `Implementation for task: ${task} (fallback action)`,
+          path: `implementation_${task.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.md`,
+          content: `# Implementation Plan for "${task}"\n\n${plan}\n\n> Note: This is a fallback implementation as the detailed action parsing failed.`
+        }
+      ];
     }
-  }
-  
-  // Fallback sequential thinking generator
-  function generateSequentialThinkingFallback(problem: string, steps: number): string {
-    let result = `# Sequential Thinking Analysis: ${problem}\n\n`;
-    
-    for (let i = 1; i <= steps; i++) {
-      result += `## Step ${i}: ${getThinkingStepTitle(i)}\n`;
-      result += getThinkingStepContent(i, problem) + '\n\n';
-    }
-    
-    result += `## Conclusion\nThis sequential analysis has broken down the problem "${problem}" into manageable components. The insights from each step build upon each other, creating a comprehensive understanding and approach. This structured thinking approach helps ensure all aspects are considered methodically.`;
-    
-    return result;
   }
 
   return server;
