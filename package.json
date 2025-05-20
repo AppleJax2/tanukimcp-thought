@@ -1,18 +1,19 @@
 {
-  "name": "tanuki-sequential-thought-mcp",
+  "name": "@applejax2/tanukimcp-thought",
   "version": "1.0.0",
-  "description": "A locally-run sequential thinking MCP server based on the Sequential Prompting Framework",
+  "description": "Sequential Prompting Framework MCP Server: Transform thoughts into structured, executable tasks",
   "main": "dist/index.js",
+  "type": "module",
   "bin": {
-    "tanuki-sequential-thought": "./bin/tanuki-sequential-thought.js",
-    "tanuki-sequential-thought-http": "./bin/tanuki-sequential-thought-http.js"
+    "tanukimcp-thought": "./bin/tanukimcp-thought.js"
   },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "dev": "node --loader ts-node/esm src/index.ts",
     "start:http": "node dist/http.js",
-    "dev:http": "ts-node src/http.ts",
+    "dev:http": "node --loader ts-node/esm src/http.ts",
+    "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -20,17 +21,36 @@
     "sequential-thinking",
     "ai",
     "agents",
-    "task-management"
+    "task-management",
+    "smithery",
+    "cursor",
+    "claude"
   ],
-  "author": "",
+  "author": "AppleJax2",
   "license": "MIT",
   "dependencies": {
-    "fastmcp": "^0.9.0",
+    "fastmcp": "^1.27.5",
     "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AppleJax2/tanukimcp-thought.git"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ]
 } 

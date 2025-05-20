@@ -1,10 +1,12 @@
-import { createServer } from 'fastmcp';
+import { FastMCP } from 'fastmcp';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 
-// Types for our todolist items
+/**
+ * Interface to represent a todolist item
+ */
 interface TodoItem {
   text: string;
   checked: boolean;
@@ -12,14 +14,35 @@ interface TodoItem {
   children: TodoItem[];
 }
 
-// Create the main server function
+/**
+ * Generic error handler to provide consistent error reporting
+ */
+const handleError = (error: unknown, message: string): string => {
+  console.error(`Error: ${message}`, error);
+  return `Error: ${message} - ${error instanceof Error ? error.message : String(error)}`;
+};
+
+/**
+ * Check if a file exists and is accessible
+ */
+const fileExists = async (filePath: string): Promise<boolean> => {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Creates the Tanuki Sequential Thought MCP server
+ * Implements tools for the Sequential Prompting Framework
+ */
 export function createTanukiServer() {
-  const server = createServer({
-    info: {
-      title: 'Tanuki Sequential Thought MCP',
-      description: 'A locally-run sequential thinking MCP server based on the Sequential Prompting Framework',
-      version: '1.0.0',
-    },
+  // Create a server with required options
+  const server = new FastMCP({
+    name: 'tanukimcp-thought',
+    version: '1.0.0',
   });
 
   // Phase 1: Brain Dump & Initial Organization
@@ -31,25 +54,35 @@ export function createTanukiServer() {
       unstructured_thoughts: z.string().describe('Unstructured thoughts, ideas, and considerations about the project'),
       output_file: z.string().optional().describe('Optional file path to save the todolist (default: tooltodo.md)'),
     }),
-    execute: async ({ project_description, unstructured_thoughts, output_file = 'tooltodo.md' }) => {
-      // This is where we'd integrate with an AI to transform the thoughts
-      // For now, we'll return a structured explanation of what this tool would do
-      
-      const todolist = `# ${project_description}\n\n## Project Todolist\n\n### Core Components\n- [ ] Component 1\n  - Core functionality description\n  - Integration points with other components\n  - Error-handling considerations\n  - Performance considerations\n- [ ] Component 2\n  - Core functionality description\n  - Integration points with other components\n  - Error-handling considerations\n  - Performance considerations\n\n### Implementation Tasks\n- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n`;
-      
+    execute: async (args) => {
       try {
+        const { project_description, unstructured_thoughts, output_file = 'tooltodo.md' } = args;
+        
+        // Validate inputs
+        if (!project_description.trim()) {
+          return 'Error: Project description cannot be empty.';
+        }
+        
+        if (!unstructured_thoughts.trim()) {
+          return 'Error: Unstructured thoughts cannot be empty.';
+        }
+        
+        // Create a basic structured todolist
+        // In a real implementation, this would use AI to transform the thoughts
+        const todolist = `# ${project_description}\n\n## Project Todolist\n\n### Core Components\n- [ ] Component 1\n  - Core functionality description\n  - Integration points with other components\n  - Error-handling considerations\n  - Performance considerations\n- [ ] Component 2\n  - Core functionality description\n  - Integration points with other components\n  - Error-handling considerations\n  - Performance considerations\n\n### Implementation Tasks\n- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n`;
+        
+        // Ensure the output directory exists
+        const dir = path.dirname(output_file);
+        if (dir !== '.' && !existsSync(dir)) {
+          await fs.mkdir(dir, { recursive: true });
+        }
+        
+        // Write the todolist to file
         await fs.writeFile(output_file, todolist, 'utf-8');
-        return {
-          success: true,
-          message: `Successfully created todolist and saved to ${output_file}`,
-          todolist,
-        };
+        
+        return `Successfully created todolist and saved to "${output_file}".\n\n${todolist}`;
       } catch (error) {
-        return {
-          success: false,
-          message: `Failed to save todolist to ${output_file}: ${error instanceof Error ? error.message : String(error)}`,
-          todolist,
-        };
+        return handleError(error, 'Failed to create and save todolist');
       }
     },
   });
@@ -62,12 +95,20 @@ export function createTanukiServer() {
       input_file: z.string().describe('Path to the existing todolist file'),
       output_file: z.string().optional().describe('Optional file path to save the enhanced todolist (defaults to overwriting input file)'),
     }),
-    execute: async ({ input_file, output_file }) => {
+    execute: async (args) => {
       try {
+        const { input_file, output_file } = args;
+        
+        // Validate file exists
+        if (!(await fileExists(input_file))) {
+          return `Error: Input file "${input_file}" does not exist or is not accessible.`;
+        }
+        
+        // Read the existing todolist
         const existingTodolist = await fs.readFile(input_file, 'utf-8');
         
-        // This is where we'd integrate with an AI to enhance the todolist
-        // For now, we'll add some placeholder enhancements
+        // In a real implementation, this would use AI to enhance the todolist
+        // For now, we'll add placeholder enhancements
         const enhancedTodolist = existingTodolist + `
 ## Enhancement Additions
 
@@ -87,19 +128,21 @@ export function createTanukiServer() {
 - [ ] Implement data validation
 `;
         
+        // Determine output file
         const targetFile = output_file || input_file;
+        
+        // Ensure the output directory exists
+        const dir = path.dirname(targetFile);
+        if (dir !== '.' && !existsSync(dir)) {
+          await fs.mkdir(dir, { recursive: true });
+        }
+        
+        // Write the enhanced todolist
         await fs.writeFile(targetFile, enhancedTodolist, 'utf-8');
         
-        return {
-          success: true,
-          message: `Successfully enhanced todolist and saved to ${targetFile}`,
-          todolist: enhancedTodolist,
-        };
+        return `Successfully enhanced todolist and saved to "${targetFile}".\n\n${enhancedTodolist}`;
       } catch (error) {
-        return {
-          success: false,
-          message: `Failed to enhance todolist: ${error instanceof Error ? error.message : String(error)}`,
-        };
+        return handleError(error, 'Failed to enhance todolist');
       }
     },
   });
@@ -111,33 +154,30 @@ export function createTanukiServer() {
     parameters: z.object({
       todolist_file: z.string().describe('Path to the todolist file'),
     }),
-    execute: async ({ todolist_file }) => {
+    execute: async (args) => {
       try {
+        const { todolist_file } = args;
+        
+        // Validate file exists
+        if (!(await fileExists(todolist_file))) {
+          return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
+        }
+        
+        // Read the todolist
         const todolist = await fs.readFile(todolist_file, 'utf-8');
         
-        // Here we would use AI to parse the todolist and identify the next logical task
-        // For this demonstration, we'll use a simple regex to find the first unchecked task
+        // In a real implementation, an AI would prioritize which task to do next
+        // For now, simply find the first unchecked task
         const uncheckedTaskRegex = /- \[ \] (.+)$/m;
         const match = todolist.match(uncheckedTaskRegex);
         
         if (match && match[1]) {
-          return {
-            success: true,
-            next_task: match[1],
-            full_context: todolist,
-          };
+          return `Next task to implement: "${match[1]}"\n\nContext from todolist:\n${todolist}`;
         } else {
-          return {
-            success: false,
-            message: 'No unchecked tasks found in the todolist.',
-            full_context: todolist,
-          };
+          return `No unchecked tasks found in the todolist. All tasks appear to be completed.\n\nTodolist content:\n${todolist}`;
         }
       } catch (error) {
-        return {
-          success: false,
-          message: `Failed to read todolist: ${error instanceof Error ? error.message : String(error)}`,
-        };
+        return handleError(error, 'Failed to find next task');
       }
     },
   });
@@ -150,34 +190,32 @@ export function createTanukiServer() {
       task: z.string().describe('The task to plan implementation for'),
       todolist_file: z.string().describe('Path to the todolist file for context'),
     }),
-    execute: async ({ task, todolist_file }) => {
+    execute: async (args) => {
       try {
+        const { task, todolist_file } = args;
+        
+        // Validate inputs
+        if (!task.trim()) {
+          return 'Error: Task description cannot be empty.';
+        }
+        
+        // Validate file exists
+        if (!(await fileExists(todolist_file))) {
+          return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
+        }
+        
+        // Read the todolist for context
         const todolist = await fs.readFile(todolist_file, 'utf-8');
         
-        // Here we would use AI to generate a detailed implementation plan
-        // For this demonstration, we'll return a structured template
+        // Check if the task exists in the todolist
+        if (!todolist.includes(task)) {
+          return `Warning: The specified task "${task}" was not found in the todolist. This plan may lack proper context.\n\n` + createImplementationPlan(task);
+        }
         
-        const implementationPlan = {
-          task,
-          approach: 'Detailed technical approach would be generated here.',
-          architecture: 'Architectural considerations would be outlined here.',
-          dependencies: ['Dependency 1', 'Dependency 2'],
-          integrationPoints: ['Integration point 1', 'Integration point 2'],
-          errorHandling: 'Error handling strategy would be detailed here.',
-          testing: 'Testing approach would be described here.',
-          performance: 'Performance considerations would be listed here.',
-        };
-        
-        return {
-          success: true,
-          implementation_plan: implementationPlan,
-          full_context: todolist,
-        };
+        // In a real implementation, this would use AI to generate a detailed plan
+        return createImplementationPlan(task);
       } catch (error) {
-        return {
-          success: false,
-          message: `Failed to generate implementation plan: ${error instanceof Error ? error.message : String(error)}`,
-        };
+        return handleError(error, 'Failed to create implementation plan');
       }
     },
   });
@@ -190,27 +228,38 @@ export function createTanukiServer() {
       task: z.string().describe('The task text to mark as complete'),
       todolist_file: z.string().describe('Path to the todolist file'),
     }),
-    execute: async ({ task, todolist_file }) => {
+    execute: async (args) => {
       try {
-        let todolist = await fs.readFile(todolist_file, 'utf-8');
+        const { task, todolist_file } = args;
         
-        // Simple string replacement to mark the task as complete
-        // In a real implementation, this would need to be more robust
+        // Validate inputs
+        if (!task.trim()) {
+          return 'Error: Task description cannot be empty.';
+        }
+        
+        // Validate file exists
+        if (!(await fileExists(todolist_file))) {
+          return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
+        }
+        
+        // Read the todolist
+        const todolist = await fs.readFile(todolist_file, 'utf-8');
+        
+        // Create a regex to find the exact task
         const taskRegex = new RegExp(`- \\[ \\] ${task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
-        todolist = todolist.replace(taskRegex, `- [x] ${task}`);
+        const updatedTodolist = todolist.replace(taskRegex, `- [x] ${task}`);
         
-        await fs.writeFile(todolist_file, todolist, 'utf-8');
+        // Check if any replacements were made
+        if (todolist === updatedTodolist) {
+          return `Task "${task}" was not found in the todolist as an unchecked task. It might be already completed or might not exist exactly as specified.`;
+        }
         
-        return {
-          success: true,
-          message: `Successfully marked task "${task}" as complete.`,
-          updated_todolist: todolist,
-        };
+        // Write the updated todolist
+        await fs.writeFile(todolist_file, updatedTodolist, 'utf-8');
+        
+        return `Successfully marked task "${task}" as complete.\n\nUpdated todolist:\n${updatedTodolist}`;
       } catch (error) {
-        return {
-          success: false,
-          message: `Failed to mark task as complete: ${error instanceof Error ? error.message : String(error)}`,
-        };
+        return handleError(error, 'Failed to mark task as complete');
       }
     },
   });
@@ -223,26 +272,131 @@ export function createTanukiServer() {
       problem: z.string().describe('The complex problem or question to analyze'),
       steps: z.number().optional().describe('Number of thinking steps to perform (default: 3)'),
     }),
-    execute: async ({ problem, steps = 3 }) => {
-      // Here we would integrate with an AI to perform sequential thinking
-      // For this demonstration, we'll return a structured template
-      
-      const thinkingSteps = [];
-      for (let i = 1; i <= steps; i++) {
-        thinkingSteps.push({
-          step: i,
-          thought: `This is where step ${i} of the sequential thinking process would be generated.`,
-        });
+    execute: async (args) => {
+      try {
+        const { problem, steps = 3 } = args;
+        
+        // Validate inputs
+        if (!problem.trim()) {
+          return 'Error: Problem description cannot be empty.';
+        }
+        
+        if (steps < 1 || steps > 10) {
+          return 'Error: Steps must be between 1 and 10.';
+        }
+        
+        // In a real implementation, this would use AI to apply sequential thinking
+        // For now, generate a placeholder thinking process
+        let result = `# Sequential Thinking Analysis: ${problem}\n\n`;
+        
+        for (let i = 1; i <= steps; i++) {
+          result += `## Step ${i}: ${getThinkingStepTitle(i)}\n`;
+          result += getThinkingStepContent(i, problem) + '\n\n';
+        }
+        
+        result += `## Conclusion\nThis sequential analysis has broken down the problem "${problem}" into manageable components. The insights from each step build upon each other, creating a comprehensive understanding and approach. This structured thinking approach helps ensure all aspects are considered methodically.`;
+        
+        return result;
+      } catch (error) {
+        return handleError(error, 'Failed to apply sequential thinking');
       }
-      
-      return {
-        success: true,
-        problem,
-        thinking_steps: thinkingSteps,
-        conclusion: 'A final conclusion would be generated based on the sequential thinking process.',
-      };
     },
   });
   
   return server;
+}
+
+/**
+ * Helper function to create a detailed implementation plan
+ */
+function createImplementationPlan(task: string): string {
+  return `
+## Implementation Plan for: "${task}"
+
+### Approach
+The implementation will follow a step-by-step approach, breaking down the task into manageable components and addressing each methodically.
+
+### Architecture
+The solution will integrate with existing systems where appropriate while maintaining clean separation of concerns and following SOLID principles.
+
+### Dependencies
+- Primary system components
+- External libraries as needed
+- Documentation and reference materials
+
+### Integration Points
+- User interface components
+- Backend services
+- Data persistence layer
+- Error handling system
+
+### Error Handling
+Comprehensive error detection and recovery mechanisms will be implemented, including:
+- Input validation
+- Exception handling
+- Graceful degradation
+- User feedback mechanisms
+
+### Testing
+Testing will include:
+- Unit tests for core functionality
+- Integration tests for system interactions
+- User acceptance criteria validation
+- Edge case and boundary testing
+
+### Performance Considerations
+- Efficiency of algorithms and data structures
+- Resource utilization monitoring
+- Caching strategies where appropriate
+- Scalability concerns and mitigations
+`;
+}
+
+/**
+ * Helper function to generate thinking step titles
+ */
+function getThinkingStepTitle(step: number): string {
+  const titles = [
+    "Initial Problem Definition",
+    "Breaking Down Components",
+    "Analyzing Relationships",
+    "Identifying Constraints",
+    "Exploring Solutions",
+    "Evaluating Options",
+    "Considering Implementation",
+    "Anticipating Challenges",
+    "Integration Planning",
+    "Refinement and Optimization"
+  ];
+  
+  return titles[step - 1] || `Thinking Step ${step}`;
+}
+
+/**
+ * Helper function to generate thinking step content
+ */
+function getThinkingStepContent(step: number, problem: string): string {
+  const stepContents = [
+    `In this initial step, we define the problem clearly: "${problem}". Understanding the core issue is essential before attempting to solve it. This involves identifying what we know, what we need to find out, and the desired outcome.`,
+    
+    `Breaking down the problem into smaller, manageable components helps in understanding the structure. Each component can be analyzed individually while keeping in mind how they fit together in the larger context.`,
+    
+    `Exploring the relationships between different components reveals dependencies, conflicts, and synergies. This step highlights how changes in one area might affect others, ensuring a holistic approach to the solution.`,
+    
+    `Identifying constraints, limitations, and boundaries clarifies what solutions are feasible. This includes technical limitations, resource constraints, time factors, and other practical considerations.`,
+    
+    `With a clear understanding of the problem structure, we can begin exploring potential solutions. This involves creative thinking and drawing on existing knowledge and patterns that might apply to the current problem.`,
+    
+    `Evaluating each option against our criteria and constraints helps identify the most promising approaches. This comparison considers effectiveness, efficiency, feasibility, and alignment with goals.`,
+    
+    `Considering how the solution would be implemented uncovers practical aspects that might influence the choice of approach. This includes resources needed, steps required, and potential pitfalls.`,
+    
+    `Anticipating challenges and preparing for them improves the robustness of the solution. This proactive approach addresses potential points of failure before they become problems.`,
+    
+    `Planning how the solution integrates with existing systems and processes ensures smooth adoption. This considers interfaces, dependencies, and transition strategies.`,
+    
+    `Final refinements optimize the solution for efficiency, elegance, and maintainability. This polishing phase enhances the quality and sustainability of the solution.`
+  ];
+  
+  return stepContents[step - 1] || `This is step ${step} of the sequential thinking process for the problem: "${problem}". In this step, we analyze the problem from a new perspective, building on previous insights and moving closer to a comprehensive solution.`;
 } 

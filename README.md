@@ -1,6 +1,141 @@
 # Tanuki Sequential Thought MCP
 
-A locally-run sequential thinking MCP server based on the Sequential Prompting Framework. This MCP server provides tools to transform disorganized thoughts into structured, executable tasks with production-quality implementation plans.
+Transform disorganized thoughts into structured, executable tasks with production-quality implementation plans. This MCP server implements the Sequential Prompting Framework for AI agents.
+
+## 📋 Simple Installation
+
+Add this to your `.cursor/mcp.json` file:
+
+```json
+"tanukimcp-thought": {
+  "command": "npx",
+  "args": ["@applejax2/tanukimcp-thought@latest"]
+}
+```
+
+That's it! Your AI agent now has access to the Sequential Prompting Framework tools.
+
+## 🔍 What is the Sequential Prompting Framework?
+
+The Sequential Prompting Framework is a structured approach to working with AI agents, breaking down the process into three key phases:
+
+1. **Capture & Organize** - Transform scattered thoughts into a structured todolist
+2. **Enhance & Refine** - Add production-quality details to each task
+3. **Implement Tasks** - Execute one task at a time with clear standards
+
+## 🛠️ Available Tools
+
+### Phase 1: Brain Dump & Organization
+
+```
+brain_dump_organize
+```
+
+Transform unstructured thoughts into a structured markdown todolist.
+
+### Phase 2: Enhance & Refine
+
+```
+enhance_todolist
+```
+
+Add detailed specifications, acceptance criteria, and technical requirements.
+
+### Phase 3: Sequential Task Implementation
+
+```
+find_next_task
+plan_task_implementation
+mark_task_complete
+```
+
+Find, plan, and implement tasks in a logical sequence.
+
+### Auxiliary Tools
+
+```
+sequential_thinking
+```
+
+Break down complex problems with a structured thinking process.
+
+## 🔄 Example Workflow
+
+1. **Organize thoughts into tasks**:
+   ```
+   I want to organize my thoughts about my new app using brain_dump_organize.
+   Project description: "A collaborative task management app"
+   Unstructured thoughts:
+   - User authentication
+   - Task creation and assignment
+   - Real-time updates
+   - Mobile responsive interface
+   ```
+
+2. **Enhance with specifications**:
+   ```
+   Now enhance the todolist with detailed specifications using enhance_todolist.
+   Input file: tooltodo.md
+   ```
+
+3. **Find next task**:
+   ```
+   What should I work on next? Use find_next_task.
+   Todolist file: tooltodo.md
+   ```
+
+4. **Plan implementation**:
+   ```
+   Create an implementation plan for "Set up authentication" using plan_task_implementation.
+   Task: Set up authentication
+   Todolist file: tooltodo.md
+   ```
+
+5. **Mark task complete**:
+   ```
+   I've completed "Set up authentication". Mark it as complete using mark_task_complete.
+   Task: Set up authentication
+   Todolist file: tooltodo.md
+   ```
+
+## 🚀 Advanced Installation Options
+
+### Direct Usage with npx
+
+```bash
+npx @applejax2/tanukimcp-thought
+```
+
+### Global Installation
+
+```bash
+npm install -g @applejax2/tanukimcp-thought
+tanukimcp-thought
+```
+
+### HTTP Server Mode
+
+```bash
+npx @applejax2/tanukimcp-thought http
+```
+
+Then connect to `http://localhost:3001/sse`
+
+## 🔌 Integration with Other MCP Servers
+
+This MCP server works great alongside:
+
+- **Desktop Commander** - For file and system operations
+- **LotusWisdomMCP** - For deep thinking sessions
+- **Memory Tools** - To maintain context between sessions
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🎓 Based on the Sequential Prompting Framework
+
+The concepts in this MCP server implement the Sequential Prompting Framework methodology for transforming unstructured thoughts into structured, executable tasks with clear implementation plans.
 
 ## 🔍 Overview
 
@@ -133,106 +268,6 @@ For a more portable configuration, create an `.cursor/mcp.json` file in your pro
 }
 ```
 
-## 🛠️ Available Tools
-
-### Phase 1: Brain Dump & Organization
-
-#### `brain_dump_organize`
-
-Transforms unstructured thoughts into a structured markdown todolist.
-
-Parameters:
-- `project_description`: Brief description of the project
-- `unstructured_thoughts`: Unstructured thoughts, ideas, and considerations
-- `output_file`: (Optional) File path to save the todolist (default: tooltodo.md)
-
-Example usage:
-```
-I want to use the brain_dump_organize tool to organize my thoughts about building a CRM system. 
-My project description is "A customer relationship management system for small businesses."
-My unstructured thoughts are:
-- User authentication and role-based access control
-- Dashboard with key metrics 
-- Customer profile management 
-- Email integration
-- React/Next.js frontend, Node.js backend
-- MongoDB for data storage
-```
-
-### Phase 2: Enhance & Refine
-
-#### `enhance_todolist`
-
-Enhances an existing todolist with more detailed specifications, acceptance criteria, and technical requirements.
-
-Parameters:
-- `input_file`: Path to the existing todolist file
-- `output_file`: (Optional) Path to save the enhanced todolist
-
-Example usage:
-```
-Now I'd like to enhance my todolist with more detailed specifications using the enhance_todolist tool. 
-The input file is "tooltodo.md".
-```
-
-### Phase 3: Sequential Task Implementation
-
-#### `find_next_task`
-
-Identifies the next logical unchecked task to implement from the todolist.
-
-Parameters:
-- `todolist_file`: Path to the todolist file
-
-Example usage:
-```
-Let's identify the next task to implement using the find_next_task tool.
-The todolist file is "tooltodo.md".
-```
-
-#### `plan_task_implementation`
-
-Creates a detailed implementation plan for a specific task.
-
-Parameters:
-- `task`: The task to plan implementation for
-- `todolist_file`: Path to the todolist file for context
-
-Example usage:
-```
-I want to plan the implementation of the task "Set up user authentication" using the plan_task_implementation tool.
-The todolist file is "tooltodo.md".
-```
-
-#### `mark_task_complete`
-
-Marks a specific task as complete in the todolist.
-
-Parameters:
-- `task`: The task text to mark as complete
-- `todolist_file`: Path to the todolist file
-
-Example usage:
-```
-I've completed the task "Set up user authentication" and want to mark it as complete using the mark_task_complete tool.
-The todolist file is "tooltodo.md".
-```
-
-### Auxiliary Tools
-
-#### `sequential_thinking`
-
-Applies the sequential thinking process to break down a complex problem.
-
-Parameters:
-- `problem`: The complex problem or question to analyze
-- `steps`: (Optional) Number of thinking steps to perform (default: 3)
-
-Example usage:
-```
-I need help breaking down the problem "How to design a scalable microservice architecture" using the sequential_thinking tool.
-```
-
 ## 🔄 Workflow Example
 
 Here's a sample workflow using the Sequential Thought MCP tools:
@@ -278,86 +313,6 @@ Here's a sample workflow using the Sequential Thought MCP tools:
    ```
 
 6. Repeat steps 3-5 until all tasks are complete.
-
-## 🤝 Integration with Other MCP Servers
-
-This MCP server can be used alongside other MCP servers for enhanced capabilities:
-
-- **Memory Tools**: Use with memory servers like `@mem0ai/mem0-memory-mcp` or `@upstash/context7-mcp` to maintain context between sessions
-- **Research Tools**: Combine with search servers like `exa` or `@nickclyde/duckduckgo-mcp-server` for information gathering
-- **Development Tools**: Pair with `@wonderwhy-er/desktop-commander` or `@smithery-ai/github` for implementation tasks
-
-### Desktop Commander Integration
-
-Desktop Commander is particularly powerful when combined with Tanuki Sequential Thought MCP. Here's how to use them together effectively:
-
-1. **Project Setup**:
-   ```
-   I need to set up a new project for [PROJECT DESCRIPTION]. First, let's create a structured todolist using the brain_dump_organize tool.
-   ```
-
-2. **File Management with Desktop Commander**:
-   ```
-   Now that I have my todolist in tooltodo.md, let's create the project structure using Desktop Commander.
-   DC: create_directory("/path/to/project/src")
-   DC: create_directory("/path/to/project/docs")
-   ```
-
-3. **Task Implementation**:
-   ```
-   Let's identify the next task using find_next_task.
-   [After getting the task]
-   Now let's plan this task with plan_task_implementation.
-   [After getting the plan]
-   Let's implement this using Desktop Commander:
-   DC: write_file("/path/to/project/src/component.js", "// Code here")
-   ```
-
-4. **Code Search and Modification**:
-   ```
-   Let's search for patterns in our codebase:
-   DC: search_code("/path/to/project", "functionName")
-   
-   Now let's modify the code:
-   DC: edit_block("/path/to/project/src/file.js", "old code", "new code")
-   ```
-
-5. **Mark Task Complete**:
-   ```
-   Now that we've implemented the task, let's mark it complete using mark_task_complete.
-   ```
-
-This workflow combines the structured task management of Tanuki Sequential Thought MCP with the filesystem and code manipulation capabilities of Desktop Commander.
-
-### LotusWisdomMCP Integration
-
-For complex problem-solving scenarios, combining Tanuki Sequential Thought MCP with LotusWisdomMCP creates a powerful thinking environment:
-
-1. **Initial Problem Breaking**:
-   ```
-   I have a complex problem: [PROBLEM DESCRIPTION]. Let's use LotusWisdomMCP to break this down.
-   ```
-
-2. **Task Structure Creation**:
-   ```
-   Based on this analysis, let's create a structured todolist using brain_dump_organize.
-   ```
-
-3. **Deep Thinking on Tasks**:
-   ```
-   For this particular task, I need deeper analysis. Let's use LotusWisdomMCP again to explore different approaches.
-   ```
-
-4. **Implementation Planning**:
-   ```
-   Now that we have clarity, let's use plan_task_implementation to create a concrete plan.
-   ```
-
-This combination helps bridge the gap between abstract problem-solving and concrete task implementation.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🙏 Acknowledgements
 

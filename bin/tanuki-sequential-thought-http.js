@@ -1,3 +1,3 @@
 #!/usr/bin/env node
 
-require('../dist/http.js'); 
+import '../dist/http.js'; 
