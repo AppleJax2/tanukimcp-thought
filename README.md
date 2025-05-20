@@ -13,6 +13,8 @@ Transform disorganized thoughts into structured, executable tasks with productio
    - **Linux**: `curl -fsSL https://ollama.ai/install.sh | sh`
    - **Windows**: [Windows installer](https://ollama.ai/)
 
+   > **Note**: When running in hosted environments (like Smithery.ai), Ollama is not required, but the MCP will fall back to rule-based processing instead of using LLMs. For full functionality with LLM-powered reasoning, run the MCP locally.
+
 2. **Install a compatible language model**
 
    This MCP uses [DeepSeek-R1](https://ollama.com/library/deepseek-r1) by default, but you can configure it to use other reasoning models:

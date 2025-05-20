@@ -59,18 +59,14 @@ const defaultConfig: Config = {
   autoCreateConfig: true
 };
 
-// Try to load user config
+// Load user config without any async operations during initialization
 let userConfig: Config = defaultConfig;
 try {
   if (existsSync('tanuki-config.json')) {
-    const configFile = fs.readFile('tanuki-config.json', 'utf-8');
-    userConfig = JSON.parse(await configFile);
-  } else {
-    // Create default config file if it doesn't exist and auto-create is enabled
-    if (defaultConfig.autoCreateConfig) {
-      await createDefaultConfigFile();
-    }
+    const configContent = require('fs').readFileSync('tanuki-config.json', 'utf-8');
+    userConfig = JSON.parse(configContent);
   }
+  // Note: We're not creating the config file here anymore - moved to a function that will be called during tool execution
 } catch (error) {
   console.error('Error loading config:', error);
 }
@@ -80,13 +76,16 @@ try {
  */
 async function createDefaultConfigFile() {
   try {
-    const configContent = JSON.stringify({
-      llmModel: defaultConfig.llmModel,
-      ollamaParams: defaultConfig.ollamaParams
-    }, null, 2);
-    
-    await fs.writeFile('tanuki-config.json', configContent, 'utf-8');
-    console.log('Created default configuration file: tanuki-config.json');
+    // Only create if it doesn't already exist (double-check to avoid race conditions)
+    if (!existsSync('tanuki-config.json') && defaultConfig.autoCreateConfig) {
+      const configContent = JSON.stringify({
+        llmModel: defaultConfig.llmModel,
+        ollamaParams: defaultConfig.ollamaParams
+      }, null, 2);
+      
+      await fs.writeFile('tanuki-config.json', configContent, 'utf-8');
+      console.log('Created default configuration file: tanuki-config.json');
+    }
   } catch (error) {
     console.error('Failed to create default configuration file:', error);
   }
@@ -155,6 +154,12 @@ export function createTanukiServer() {
   // Helper function to check Ollama requirements only when needed
   async function ensureOllamaRequirements() {
     try {
+      // Skip check in hosted environments
+      if (process.env.SMITHERY_HOSTED === 'true') {
+        console.log('Running in hosted environment, skipping Ollama check');
+        throw new Error('Running in hosted environment, Ollama not available');
+      }
+      
       console.log('Checking for Ollama installation...');
       await execAsync('ollama --version');
       
@@ -165,9 +170,20 @@ export function createTanukiServer() {
         throw new Error(`Required model "${REQUIRED_MODEL}" not found. Please run: ollama pull ${REQUIRED_MODEL}`);
       }
       
+      // Only create config file at this point if needed
+      if (defaultConfig.autoCreateConfig && !existsSync('tanuki-config.json')) {
+        await createDefaultConfigFile();
+      }
+      
       console.log('✅ Ollama and required model verified!');
       return true;
     } catch (error) {
+      // If in hosted environment, don't show error details
+      if (process.env.SMITHERY_HOSTED === 'true') {
+        console.log('Note: This tool requires Ollama to be installed locally for full functionality.');
+        return false;
+      }
+      
       console.error('\n=== TANUKI SEQUENTIAL THOUGHT MCP REQUIREMENTS ===');
       console.error('ERROR: Ollama is required for this tool to function.');
       console.error('Please install Ollama from https://ollama.ai/');
@@ -176,6 +192,27 @@ export function createTanukiServer() {
       console.error('the checkOllamaRequirements function in src/server.ts to return without error.');
       console.error('======================================================\n');
       throw error;
+    }
+  }
+  
+  // Modified execute function with fallback for hosted environments
+  async function executeWithOllamaOrFallback(command: string, fallbackFunction: Function): Promise<string> {
+    try {
+      // Try to use Ollama
+      const ollamaAvailable = await ensureOllamaRequirements().catch(() => false);
+      
+      if (ollamaAvailable) {
+        const { stdout } = await execAsync(command);
+        return stdout;
+      } else {
+        // If Ollama not available and in hosted environment, use fallback
+        console.log('Ollama not available, using fallback function');
+        return await fallbackFunction();
+      }
+    } catch (error) {
+      // If execution fails, also use fallback
+      console.warn('Ollama execution failed, using fallback function');
+      return await fallbackFunction();
     }
   }
 
@@ -201,12 +238,44 @@ export function createTanukiServer() {
           return 'Error: Unstructured thoughts cannot be empty.';
         }
         
+        // Check if running in hosted environment
+        if (process.env.SMITHERY_HOSTED === 'true') {
+          // In hosted environments, provide a user-friendly message
+          const todolist = generateTodoWithRules(project_description, unstructured_thoughts);
+          
+          // Still write the todolist to file so it can be used in subsequent steps
+          try {
+            // Ensure the output directory exists
+            const dir = path.dirname(output_file);
+            if (dir !== '.' && !existsSync(dir)) {
+              await fs.mkdir(dir, { recursive: true });
+            }
+            
+            await fs.writeFile(output_file, todolist, 'utf-8');
+          } catch (fileError) {
+            console.warn('Could not write todolist to file in hosted environment:', fileError);
+          }
+          
+          return `Note: In hosted environments, this tool uses rule-based processing instead of LLM. For full functionality, use locally with Ollama installed.\n\n${todolist}`;
+        }
+        
         // Check Ollama requirements only when the tool is called
         try {
           await ensureOllamaRequirements();
         } catch (error) {
-          // In hosted environments, provide a more user-friendly error
-          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
+          // Use rule-based fallback if Ollama not available
+          const todolist = generateTodoWithRules(project_description, unstructured_thoughts);
+          
+          // Ensure the output directory exists
+          const dir = path.dirname(output_file);
+          if (dir !== '.' && !existsSync(dir)) {
+            await fs.mkdir(dir, { recursive: true });
+          }
+          
+          // Write the todolist to file
+          await fs.writeFile(output_file, todolist, 'utf-8');
+          
+          return `This tool requires Ollama and the deepseek-r1 model to be installed locally. Using rule-based fallback.\n\n${todolist}`;
         }
         
         // Generate todolist with LLM
@@ -252,8 +321,11 @@ export function createTanukiServer() {
       // Build Ollama parameters
       const ollamaParamsString = buildOllamaParamsString();
       
-      // Run Ollama with parameters
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
+      // Use the new function with fallback
+      const stdout = await executeWithOllamaOrFallback(
+        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+        () => Promise.resolve(generateTodoWithRules(projectDescription, thoughts))
+      );
       
       // Clean up the output to ensure it's valid markdown
       let output = stdout.trim();
@@ -266,7 +338,8 @@ export function createTanukiServer() {
       return output;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      throw new Error(`LLM generation failed: ${errorMessage}`);
+      console.warn(`LLM generation failed: ${errorMessage}, using rule-based fallback`);
+      return generateTodoWithRules(projectDescription, thoughts);
     }
   }
   
@@ -444,8 +517,11 @@ export function createTanukiServer() {
       // Build Ollama parameters
       const ollamaParamsString = buildOllamaParamsString();
       
-      // Run Ollama with parameters
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
+      // Use the new function with fallback
+      const stdout = await executeWithOllamaOrFallback(
+        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+        () => Promise.resolve(enhanceTodoWithRules(existingTodolist))
+      );
       
       // Clean up the output and ensure it's valid markdown
       let output = stdout.trim();
@@ -625,8 +701,18 @@ export function createTanukiServer() {
       // Build Ollama parameters
       const ollamaParamsString = buildOllamaParamsString();
       
-      // Run Ollama with parameters
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
+      // Fallback function to find first unchecked task
+      const findFirstUncheckedTask = () => {
+        const match = todolist.match(/- \[ \] (.+)$/m);
+        const nextTask = match ? match[1] : "No specific task identified";
+        return Promise.resolve(nextTask);
+      };
+      
+      // Use the new function with fallback
+      const stdout = await executeWithOllamaOrFallback(
+        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+        findFirstUncheckedTask
+      );
       
       // Clean up the output
       let nextTask = stdout.trim();
@@ -729,8 +815,11 @@ export function createTanukiServer() {
       // Build Ollama parameters
       const ollamaParamsString = buildOllamaParamsString();
       
-      // Run Ollama with parameters
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
+      // Use the new function with fallback
+      const stdout = await executeWithOllamaOrFallback(
+        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+        () => Promise.resolve(createImplementationPlanFallback(task))
+      );
       
       // Clean up the output
       let plan = stdout.trim();
@@ -1011,8 +1100,23 @@ export function createTanukiServer() {
       // Build Ollama parameters
       const ollamaParamsString = buildOllamaParamsString();
       
-      // Run Ollama with parameters
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
+      // Fallback function to create minimal action set
+      const createMinimalActionSet = () => {
+        return Promise.resolve(JSON.stringify([
+          {
+            type: 'create_file',
+            description: `Implementation for task: ${task} (fallback action)`,
+            path: `implementation_${task.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.md`,
+            content: `# Implementation Plan for "${task}"\n\n${plan}\n\n> Note: This is a fallback implementation as the detailed action parsing failed.`
+          }
+        ]));
+      };
+      
+      // Use the new function with fallback
+      const stdout = await executeWithOllamaOrFallback(
+        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+        createMinimalActionSet
+      );
       
       // Extract JSON from the response
       const jsonMatch = stdout.match(/\[.*\]/s);
