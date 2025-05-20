@@ -12,37 +12,6 @@ const execAsync = promisify(exec);
 const REQUIRED_MODEL = 'deepseek-r1';
 
 /**
- * Check if Ollama is installed and the required model is available
- * Exits with an error message if requirements aren't met
- */
-async function checkOllamaRequirements() {
-  try {
-    console.log('Checking for Ollama installation...');
-    await execAsync('ollama --version');
-    
-    console.log(`Checking for ${REQUIRED_MODEL} model...`);
-    const { stdout } = await execAsync('ollama list');
-    
-    if (!stdout.includes(REQUIRED_MODEL)) {
-      console.error(`ERROR: Required model "${REQUIRED_MODEL}" not found.`);
-      console.error(`Please run: ollama pull ${REQUIRED_MODEL}`);
-      process.exit(1);
-    }
-    
-    console.log('✅ Ollama and required model verified!');
-  } catch (error) {
-    console.error('\n=== TANUKI SEQUENTIAL THOUGHT MCP REQUIREMENTS ===');
-    console.error('ERROR: Ollama is required for this tool to function.');
-    console.error('Please install Ollama from https://ollama.ai/');
-    console.error(`Then run: ollama pull ${REQUIRED_MODEL}`);
-    console.error('\nFor development purposes only, you can bypass this check by modifying');
-    console.error('the checkOllamaRequirements function in src/server.ts to return without error.');
-    console.error('======================================================\n');
-    process.exit(1);
-  }
-}
-
-/**
  * Interface to represent a todolist item
  */
 interface TodoItem {
@@ -108,17 +77,38 @@ const fileExists = async (filePath: string): Promise<boolean> => {
  * Implements tools for the Sequential Prompting Framework
  */
 export function createTanukiServer() {
-  // First check for Ollama and required model
-  checkOllamaRequirements().catch(error => {
-    console.error('Failed to verify Ollama requirements:', error);
-    process.exit(1);
-  });
-  
   // Create a server with required options
   const server = new FastMCP({
     name: 'tanukimcp-thought',
     version: '1.0.0',
   });
+
+  // Helper function to check Ollama requirements only when needed
+  async function ensureOllamaRequirements() {
+    try {
+      console.log('Checking for Ollama installation...');
+      await execAsync('ollama --version');
+      
+      console.log(`Checking for ${REQUIRED_MODEL} model...`);
+      const { stdout } = await execAsync('ollama list');
+      
+      if (!stdout.includes(REQUIRED_MODEL)) {
+        throw new Error(`Required model "${REQUIRED_MODEL}" not found. Please run: ollama pull ${REQUIRED_MODEL}`);
+      }
+      
+      console.log('✅ Ollama and required model verified!');
+      return true;
+    } catch (error) {
+      console.error('\n=== TANUKI SEQUENTIAL THOUGHT MCP REQUIREMENTS ===');
+      console.error('ERROR: Ollama is required for this tool to function.');
+      console.error('Please install Ollama from https://ollama.ai/');
+      console.error(`Then run: ollama pull ${REQUIRED_MODEL}`);
+      console.error('\nFor development purposes only, you can bypass this check by modifying');
+      console.error('the checkOllamaRequirements function in src/server.ts to return without error.');
+      console.error('======================================================\n');
+      throw error;
+    }
+  }
 
   // Phase 1: Brain Dump & Initial Organization
   server.addTool({
@@ -140,6 +130,14 @@ export function createTanukiServer() {
         
         if (!unstructured_thoughts.trim()) {
           return 'Error: Unstructured thoughts cannot be empty.';
+        }
+        
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
         }
         
         // Generate todolist with LLM
@@ -314,6 +312,14 @@ export function createTanukiServer() {
         // Validate file exists
         if (!(await fileExists(input_file))) {
           return `Error: Input file "${input_file}" does not exist or is not accessible.`;
+        }
+        
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
         }
         
         // Read the existing todolist
@@ -496,6 +502,14 @@ export function createTanukiServer() {
           return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
         }
         
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
+        }
+        
         // Read the todolist
         const todolist = await fs.readFile(todolist_file, 'utf-8');
         
@@ -580,6 +594,14 @@ export function createTanukiServer() {
         // Validate file exists
         if (!(await fileExists(todolist_file))) {
           return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
+        }
+        
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
         }
         
         // Read the todolist for context
@@ -710,6 +732,14 @@ export function createTanukiServer() {
         
         if (steps < 1 || steps > 10) {
           return 'Error: Steps must be between 1 and 10.';
+        }
+        
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
         }
         
         // Generate sequential thinking analysis with LLM
