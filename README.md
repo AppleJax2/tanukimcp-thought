@@ -137,15 +137,30 @@ Find, plan, implement, and track tasks in a logical sequence:
 
 ### Customizing the Language Model
 
-You can customize the model by creating a `tanuki-config.json` file in your project:
+You can customize the model and its parameters by creating a `tanuki-config.json` file in your project:
 
 ```json
 {
-  "llmModel": "deepseek-r1"
+  "llmModel": "deepseek-r1",
+  "ollamaParams": {
+    "num_ctx": 16384,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "num_thread": 8
+  },
+  "autoCreateConfig": true
 }
 ```
 
 Replace "deepseek-r1" with any compatible Ollama model you've installed.
+
+The `ollamaParams` object supports the following configuration options:
+- `num_ctx`: Maximum context window size (default: 16384)
+- `temperature`: Controls randomness of output (0.0-1.0, default: 0.7)
+- `top_p`: Controls diversity via nucleus sampling (0.0-1.0, default: 0.9)
+- `num_thread`: Number of threads to use for computation (default: 8)
+
+The `autoCreateConfig` flag (default: true) automatically creates this configuration file with optimal settings if it doesn't exist.
 
 ## 🧠 LLM Integration
 

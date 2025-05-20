@@ -30,15 +30,33 @@ interface TaskCategory {
 }
 
 /**
+ * Ollama parameters for model inference
+ */
+interface OllamaParams {
+  num_ctx?: number;
+  temperature?: number;
+  top_p?: number;
+  num_thread?: number;
+}
+
+/**
  * Configuration options
  */
 interface Config {
   llmModel: string;
+  ollamaParams?: OllamaParams;
+  autoCreateConfig?: boolean;
 }
 
 // Default configuration
 const defaultConfig: Config = {
-  llmModel: REQUIRED_MODEL
+  llmModel: REQUIRED_MODEL,
+  ollamaParams: {
+    num_ctx: 16384,
+    temperature: 0.7,
+    num_thread: 8
+  },
+  autoCreateConfig: true
 };
 
 // Try to load user config
@@ -47,9 +65,31 @@ try {
   if (existsSync('tanuki-config.json')) {
     const configFile = fs.readFile('tanuki-config.json', 'utf-8');
     userConfig = JSON.parse(await configFile);
+  } else {
+    // Create default config file if it doesn't exist and auto-create is enabled
+    if (defaultConfig.autoCreateConfig) {
+      await createDefaultConfigFile();
+    }
   }
 } catch (error) {
   console.error('Error loading config:', error);
+}
+
+/**
+ * Creates a default configuration file with optimized settings
+ */
+async function createDefaultConfigFile() {
+  try {
+    const configContent = JSON.stringify({
+      llmModel: defaultConfig.llmModel,
+      ollamaParams: defaultConfig.ollamaParams
+    }, null, 2);
+    
+    await fs.writeFile('tanuki-config.json', configContent, 'utf-8');
+    console.log('Created default configuration file: tanuki-config.json');
+  } catch (error) {
+    console.error('Failed to create default configuration file:', error);
+  }
 }
 
 /**
@@ -71,6 +111,35 @@ const fileExists = async (filePath: string): Promise<boolean> => {
     return false;
   }
 };
+
+/**
+ * Builds a string of Ollama parameters for the command line
+ */
+function buildOllamaParamsString(): string {
+  if (!userConfig.ollamaParams) {
+    return '';
+  }
+  
+  const params = [];
+  
+  if (userConfig.ollamaParams.num_ctx) {
+    params.push(`-c ${userConfig.ollamaParams.num_ctx}`);
+  }
+  
+  if (userConfig.ollamaParams.temperature !== undefined) {
+    params.push(`--temperature ${userConfig.ollamaParams.temperature}`);
+  }
+  
+  if (userConfig.ollamaParams.top_p !== undefined) {
+    params.push(`--top-p ${userConfig.ollamaParams.top_p}`);
+  }
+  
+  if (userConfig.ollamaParams.num_thread) {
+    params.push(`--num-thread ${userConfig.ollamaParams.num_thread}`);
+  }
+  
+  return params.join(' ');
+}
 
 /**
  * Creates the Tanuki Sequential Thought MCP server
@@ -180,7 +249,11 @@ export function createTanukiServer() {
       Return ONLY the markdown todolist without any other text.
       `;
       
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      // Build Ollama parameters
+      const ollamaParamsString = buildOllamaParamsString();
+      
+      // Run Ollama with parameters
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
       
       // Clean up the output to ensure it's valid markdown
       let output = stdout.trim();
@@ -368,7 +441,11 @@ export function createTanukiServer() {
       Return the complete enhanced markdown todolist.
       `;
       
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      // Build Ollama parameters
+      const ollamaParamsString = buildOllamaParamsString();
+      
+      // Run Ollama with parameters
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
       
       // Clean up the output and ensure it's valid markdown
       let output = stdout.trim();
@@ -545,7 +622,11 @@ export function createTanukiServer() {
       Return ONLY the text of the single next task to implement, exactly as it appears in the todolist, without the checkbox or additional explanation.
       `;
       
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      // Build Ollama parameters
+      const ollamaParamsString = buildOllamaParamsString();
+      
+      // Run Ollama with parameters
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
       
       // Clean up the output
       let nextTask = stdout.trim();
@@ -645,7 +726,11 @@ export function createTanukiServer() {
       Format your response as a comprehensive markdown implementation plan.
       `;
       
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      // Build Ollama parameters
+      const ollamaParamsString = buildOllamaParamsString();
+      
+      // Run Ollama with parameters
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
       
       // Clean up the output
       let plan = stdout.trim();
@@ -923,7 +1008,11 @@ export function createTanukiServer() {
       Return ONLY a valid JSON array of actions, with no explanation or other text.
       `;
       
-      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} "${prompt.replace(/"/g, '\\"')}"`);
+      // Build Ollama parameters
+      const ollamaParamsString = buildOllamaParamsString();
+      
+      // Run Ollama with parameters
+      const { stdout } = await execAsync(`ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`);
       
       // Extract JSON from the response
       const jsonMatch = stdout.match(/\[.*\]/s);
