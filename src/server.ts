@@ -899,16 +899,17 @@ export function createTanukiServer() {
   // Add the new task_executor tool
   server.addTool({
     name: 'task_executor',
-    description: 'Execute a planned task by implementing the necessary file operations based on the implementation plan.',
+    description: 'Execute a planned task by implementing the necessary file operations based on the implementation plan. Use validate_plan=true to preview actions without executing them.',
     parameters: z.object({
       task: z.string().describe('The task to implement'),
       todolist_file: z.string().describe('Path to the todolist file containing the task'),
       implementation_plan: z.string().optional().describe('Optional implementation plan for the task. If not provided, a plan will be generated.'),
       target_directory: z.string().optional().describe('Optional target directory for file operations. Defaults to current directory.'),
+      validate_plan: z.boolean().optional().describe('Whether to only validate and preview the plan without executing it (default: false)'),
     }),
     execute: async (args) => {
       try {
-        const { task, todolist_file, implementation_plan, target_directory = '.' } = args;
+        const { task, todolist_file, implementation_plan, target_directory = '.', validate_plan = false } = args;
         
         // Validate inputs
         if (!task.trim()) {
@@ -936,6 +937,101 @@ export function createTanukiServer() {
         if (!executionPlan) {
           console.log(`Generating implementation plan for task: ${task}`);
           executionPlan = await createImplementationPlanWithLLM(task, todolist);
+        }
+        
+        // Parse the implementation plan into actions for validation/preview
+        const actions = await parsePlanIntoActions(executionPlan, task);
+        
+        // If validate_plan is true, preview the actions without executing them
+        if (validate_plan) {
+          // Generate a detailed preview of each action
+          const actionPreviews = [];
+          
+          for (const action of actions) {
+            switch (action.type) {
+              case 'create_file':
+                if (action.path && action.content) {
+                  const filePath = path.join(target_directory, action.path);
+                  const fileExists = existsSync(filePath);
+                  actionPreviews.push(`CREATE FILE: ${filePath}${fileExists ? ' (exists, will be overwritten)' : ''}\n` +
+                    `Content length: ${action.content.length} characters\n` +
+                    `Preview: ${action.content.slice(0, 100)}${action.content.length > 100 ? '...' : ''}`);
+                } else {
+                  actionPreviews.push(`CREATE FILE: Invalid action - missing path or content`);
+                }
+                break;
+                
+              case 'edit_file':
+                if (action.path && action.changes) {
+                  const filePath = path.join(target_directory, action.path);
+                  const fileExists = existsSync(filePath);
+                  if (fileExists) {
+                    const changes = action.changes.map((c: any) => {
+                      if (c.type === 'replace') return `Replace "${c.old?.slice(0, 30)}${c.old?.length > 30 ? '...' : ''}" with "${c.new?.slice(0, 30)}${c.new?.length > 30 ? '...' : ''}"`;
+                      if (c.type === 'append') return `Append ${c.content?.length} characters`;
+                      if (c.type === 'prepend') return `Prepend ${c.content?.length} characters`;
+                      if (c.type === 'insert_at_line') return `Insert at line ${c.line}: "${c.content?.slice(0, 30)}${c.content?.length > 30 ? '...' : ''}"`;
+                      return `Unknown change type: ${c.type}`;
+                    }).join('\n  - ');
+                    
+                    actionPreviews.push(`EDIT FILE: ${filePath}\nChanges:\n  - ${changes}`);
+                  } else {
+                    actionPreviews.push(`EDIT FILE: ${filePath} (does not exist, operation will fail)`);
+                  }
+                } else {
+                  actionPreviews.push(`EDIT FILE: Invalid action - missing path or changes`);
+                }
+                break;
+                
+              case 'delete_file':
+                if (action.path) {
+                  const filePath = path.join(target_directory, action.path);
+                  const fileExists = existsSync(filePath);
+                  actionPreviews.push(`DELETE FILE: ${filePath}${fileExists ? '' : ' (does not exist, operation will fail)'}`);
+                } else {
+                  actionPreviews.push(`DELETE FILE: Invalid action - missing path`);
+                }
+                break;
+                
+              case 'move_file':
+                if (action.from && action.to) {
+                  const fromPath = path.join(target_directory, action.from);
+                  const toPath = path.join(target_directory, action.to);
+                  const fromExists = existsSync(fromPath);
+                  const toExists = existsSync(toPath);
+                  
+                  actionPreviews.push(`MOVE FILE: ${fromPath} -> ${toPath}\n` +
+                    `Source ${fromExists ? 'exists' : 'does not exist (operation will fail)'}\n` +
+                    `Destination ${toExists ? 'exists (will be overwritten)' : 'does not exist'}`);
+                } else {
+                  actionPreviews.push(`MOVE FILE: Invalid action - missing from or to paths`);
+                }
+                break;
+                
+              case 'copy_file':
+                if (action.from && action.to) {
+                  const fromPath = path.join(target_directory, action.from);
+                  const toPath = path.join(target_directory, action.to);
+                  const fromExists = existsSync(fromPath);
+                  const toExists = existsSync(toPath);
+                  
+                  actionPreviews.push(`COPY FILE: ${fromPath} -> ${toPath}\n` +
+                    `Source ${fromExists ? 'exists' : 'does not exist (operation will fail)'}\n` +
+                    `Destination ${toExists ? 'exists (will be overwritten)' : 'does not exist'}`);
+                } else {
+                  actionPreviews.push(`COPY FILE: Invalid action - missing from or to paths`);
+                }
+                break;
+                
+              default:
+                actionPreviews.push(`Unknown action type: ${action.type}`);
+            }
+          }
+          
+          return `Plan validation for task "${task}":\n\n` +
+                 `This plan would perform ${actions.length} operations in "${target_directory}":\n\n` +
+                 actionPreviews.join('\n\n') + 
+                 '\n\nTo execute this plan, run again without validate_plan=true or with validate_plan=false.';
         }
         
         // Execute the implementation plan
@@ -1319,6 +1415,416 @@ export function createTanukiServer() {
         return `File copied from ${fromPath} to ${toPath}`;
       } catch (error) {
         return handleError(error, 'Failed to copy file');
+      }
+    },
+  });
+
+  // CREATE DIRECTORY
+  server.addTool({
+    name: 'create_directory',
+    description: 'Create a new directory in the workspace.',
+    parameters: z.object({
+      path: z.string().describe('Relative path to the directory to create'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      recursive: z.boolean().optional().describe('Whether to create parent directories if they do not exist (default: true)'),
+    }),
+    execute: async (args) => {
+      try {
+        const { path: relPath, workspace_root = '.', recursive = true } = args;
+        const dirPath = resolveWorkspacePath(workspace_root, relPath);
+        
+        if (existsSync(dirPath)) {
+          return `Directory already exists at ${dirPath}`;
+        }
+        
+        await fs.mkdir(dirPath, { recursive });
+        return `Directory created at ${dirPath}`;
+      } catch (error) {
+        return handleError(error, 'Failed to create directory');
+      }
+    },
+  });
+
+  // LIST DIRECTORY
+  server.addTool({
+    name: 'list_directory',
+    description: 'List the contents of a directory in the workspace.',
+    parameters: z.object({
+      path: z.string().describe('Relative path to the directory to list'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      include_hidden: z.boolean().optional().describe('Whether to include hidden files (default: false)'),
+    }),
+    execute: async (args) => {
+      try {
+        const { path: relPath, workspace_root = '.', include_hidden = false } = args;
+        const dirPath = resolveWorkspacePath(workspace_root, relPath);
+        
+        if (!existsSync(dirPath)) {
+          return `Directory not found: ${dirPath}`;
+        }
+        
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+        const files = [];
+        const directories = [];
+        
+        for (const entry of entries) {
+          // Skip hidden files/directories unless include_hidden is true
+          if (!include_hidden && entry.name.startsWith('.')) {
+            continue;
+          }
+          
+          if (entry.isDirectory()) {
+            directories.push(`[dir] ${entry.name}/`);
+          } else {
+            // Get file size if it's a file
+            const stats = await fs.stat(path.join(dirPath, entry.name));
+            const size = stats.size;
+            const sizeStr = size < 1024 ? `${size}B` : size < 1024 * 1024 ? `${(size / 1024).toFixed(1)}KB` : `${(size / (1024 * 1024)).toFixed(1)}MB`;
+            files.push(`[file] ${entry.name} (${sizeStr})`);
+          }
+        }
+        
+        // Sort and combine
+        directories.sort();
+        files.sort();
+        const listing = [...directories, ...files].join('\n');
+        
+        return `Contents of ${dirPath}:\n\n${listing || 'Empty directory'}`;
+      } catch (error) {
+        return handleError(error, 'Failed to list directory');
+      }
+    },
+  });
+
+  // DELETE DIRECTORY
+  server.addTool({
+    name: 'delete_directory',
+    description: 'Delete a directory from the workspace.',
+    parameters: z.object({
+      path: z.string().describe('Relative path to the directory to delete'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      recursive: z.boolean().optional().describe('Whether to recursively delete contents (default: false)'),
+      dry_run: z.boolean().optional().describe('Preview the operation without making changes (default: false)'),
+    }),
+    execute: async (args) => {
+      try {
+        const { path: relPath, workspace_root = '.', recursive = false, dry_run = false } = args;
+        const dirPath = resolveWorkspacePath(workspace_root, relPath);
+        
+        if (!existsSync(dirPath)) {
+          return `Directory not found: ${dirPath}`;
+        }
+        
+        // Get contents for preview or to check if directory is empty
+        const entries = await fs.readdir(dirPath);
+        
+        // Preview mode
+        if (dry_run) {
+          if (entries.length > 0 && !recursive) {
+            return `DRY RUN: Would fail to delete non-empty directory ${dirPath}. Use recursive=true to delete with contents.`;
+          }
+          return `DRY RUN: Would delete directory ${dirPath}${recursive ? ' and all its contents' : ''}`;
+        }
+        
+        // Non-recursive delete requires directory to be empty
+        if (entries.length > 0 && !recursive) {
+          return `Error: Directory is not empty: ${dirPath}. Use recursive=true to delete non-empty directories.`;
+        }
+        
+        // Perform the delete operation
+        if (recursive) {
+          await fs.rm(dirPath, { recursive: true, force: true });
+        } else {
+          await fs.rmdir(dirPath);
+        }
+        
+        return `Directory deleted: ${dirPath}${recursive ? ' (including all contents)' : ''}`;
+      } catch (error) {
+        return handleError(error, 'Failed to delete directory');
+      }
+    },
+  });
+
+  // BATCH OPERATIONS
+  server.addTool({
+    name: 'batch_operations',
+    description: 'Execute multiple file/directory operations in a single batch.',
+    parameters: z.object({
+      operations: z.array(
+        z.object({
+          type: z.enum(['create_file', 'edit_file', 'delete_file', 'move_file', 'copy_file', 'create_directory', 'delete_directory']),
+          params: z.record(z.any()).describe('Parameters for the operation, matching the parameters of the individual tool'),
+        })
+      ).describe('Array of operations to perform'),
+      workspace_root: z.string().optional().describe('Default workspace root directory for all operations (default: ".")'),
+      dry_run: z.boolean().optional().describe('Preview all operations without making changes (default: false)'),
+      continue_on_error: z.boolean().optional().describe('Whether to continue executing operations after an error (default: false)'),
+    }),
+    execute: async (args) => {
+      try {
+        const { operations, workspace_root = '.', dry_run = false, continue_on_error = false } = args;
+        const results = [];
+        let success = true;
+        
+        for (const [index, operation] of operations.entries()) {
+          try {
+            // Apply workspace_root from batch to operation if not specified
+            const params = {
+              ...operation.params,
+              workspace_root: operation.params.workspace_root || workspace_root,
+              dry_run: dry_run || operation.params.dry_run,
+            };
+            
+            // Type assertion for params to avoid TypeScript errors
+            const typedParams = params as Record<string, any>;
+            
+            let result;
+            switch (operation.type) {
+              case 'create_file':
+                // Execute create_file directly
+                if (typedParams.path && typedParams.content) {
+                  const filePath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.path);
+                  const dir = path.dirname(filePath);
+                  
+                  if (typedParams.dry_run) {
+                    result = `DRY RUN: Would create file at ${filePath}`;
+                  } else {
+                    // Ensure directory exists
+                    if (!existsSync(dir)) {
+                      await fs.mkdir(dir, { recursive: true });
+                    }
+                    
+                    // Check for file existence and overwrite flag
+                    if (!typedParams.overwrite && existsSync(filePath)) {
+                      result = `Error: File already exists at ${filePath}. Set overwrite=true to overwrite.`;
+                    } else {
+                      await fs.writeFile(filePath, typedParams.content, 'utf-8');
+                      result = `File created at ${filePath}`;
+                    }
+                  }
+                } else {
+                  result = 'Error: Missing required parameters (path, content) for create_file operation';
+                  success = false;
+                }
+                break;
+                
+              case 'edit_file':
+                // Execute edit_file directly
+                if (typedParams.path && typedParams.changes) {
+                  const filePath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.path);
+                  
+                  if (typedParams.dry_run) {
+                    result = `DRY RUN: Would edit file at ${filePath}`;
+                  } else {
+                    // Check if file exists
+                    if (!existsSync(filePath)) {
+                      result = `Error: File not found: ${filePath}`;
+                      success = false;
+                    } else {
+                      const currentContent = await fs.readFile(filePath, 'utf-8');
+                      let newContent = currentContent;
+                      
+                      // Apply each change
+                      for (const change of typedParams.changes) {
+                        if (change.type === 'replace' && change.old && change.new) {
+                          newContent = newContent.replace(change.old, change.new);
+                        } else if (change.type === 'append' && change.content) {
+                          newContent += change.content;
+                        } else if (change.type === 'prepend' && change.content) {
+                          newContent = change.content + newContent;
+                        } else if (change.type === 'insert_at_line' && change.line !== undefined && change.content) {
+                          const lines = newContent.split('\n');
+                          if (change.line >= 0 && change.line <= lines.length) {
+                            lines.splice(change.line, 0, change.content);
+                            newContent = lines.join('\n');
+                          }
+                        }
+                      }
+                      
+                      await fs.writeFile(filePath, newContent, 'utf-8');
+                      result = `File edited at ${filePath}`;
+                    }
+                  }
+                } else {
+                  result = 'Error: Missing required parameters (path, changes) for edit_file operation';
+                  success = false;
+                }
+                break;
+                
+              case 'delete_file':
+                // Execute delete_file directly
+                if (typedParams.path) {
+                  const filePath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.path);
+                  
+                  if (typedParams.dry_run) {
+                    result = `DRY RUN: Would delete file at ${filePath}`;
+                  } else {
+                    if (!existsSync(filePath)) {
+                      result = `File not found: ${filePath}`;
+                    } else {
+                      await fs.unlink(filePath);
+                      result = `File deleted: ${filePath}`;
+                    }
+                  }
+                } else {
+                  result = 'Error: Missing required parameter (path) for delete_file operation';
+                  success = false;
+                }
+                break;
+                
+              case 'move_file':
+                // Execute move_file directly
+                if (typedParams.from && typedParams.to) {
+                  const fromPath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.from);
+                  const toPath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.to);
+                  
+                  if (typedParams.dry_run) {
+                    result = `DRY RUN: Would move file from ${fromPath} to ${toPath}`;
+                  } else {
+                    if (!existsSync(fromPath)) {
+                      result = `Source file not found: ${fromPath}`;
+                      success = false;
+                    } else if (!typedParams.overwrite && existsSync(toPath)) {
+                      result = `Destination file already exists: ${toPath}. Set overwrite=true to overwrite.`;
+                      success = false;
+                    } else {
+                      const toDir = path.dirname(toPath);
+                      if (!existsSync(toDir)) {
+                        await fs.mkdir(toDir, { recursive: true });
+                      }
+                      
+                      await fs.rename(fromPath, toPath);
+                      result = `File moved from ${fromPath} to ${toPath}`;
+                    }
+                  }
+                } else {
+                  result = 'Error: Missing required parameters (from, to) for move_file operation';
+                  success = false;
+                }
+                break;
+                
+              case 'copy_file':
+                // Execute copy_file directly
+                if (typedParams.from && typedParams.to) {
+                  const fromPath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.from);
+                  const toPath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.to);
+                  
+                  if (typedParams.dry_run) {
+                    result = `DRY RUN: Would copy file from ${fromPath} to ${toPath}`;
+                  } else {
+                    if (!existsSync(fromPath)) {
+                      result = `Source file not found: ${fromPath}`;
+                      success = false;
+                    } else if (!typedParams.overwrite && existsSync(toPath)) {
+                      result = `Destination file already exists: ${toPath}. Set overwrite=true to overwrite.`;
+                      success = false;
+                    } else {
+                      const toDir = path.dirname(toPath);
+                      if (!existsSync(toDir)) {
+                        await fs.mkdir(toDir, { recursive: true });
+                      }
+                      
+                      await fs.copyFile(fromPath, toPath);
+                      result = `File copied from ${fromPath} to ${toPath}`;
+                    }
+                  }
+                } else {
+                  result = 'Error: Missing required parameters (from, to) for copy_file operation';
+                  success = false;
+                }
+                break;
+                
+              case 'create_directory':
+                // Execute create_directory directly
+                if (typedParams.path) {
+                  const dirPath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.path);
+                  
+                  if (typedParams.dry_run) {
+                    result = `DRY RUN: Would create directory at ${dirPath}`;
+                  } else {
+                    if (existsSync(dirPath)) {
+                      result = `Directory already exists at ${dirPath}`;
+                    } else {
+                      await fs.mkdir(dirPath, { recursive: typedParams.recursive !== false });
+                      result = `Directory created at ${dirPath}`;
+                    }
+                  }
+                } else {
+                  result = 'Error: Missing required parameter (path) for create_directory operation';
+                  success = false;
+                }
+                break;
+                
+              case 'delete_directory':
+                // Execute delete_directory directly
+                if (typedParams.path) {
+                  const dirPath = resolveWorkspacePath(typedParams.workspace_root || '.', typedParams.path);
+                  
+                  if (typedParams.dry_run) {
+                    const entries = existsSync(dirPath) ? await fs.readdir(dirPath) : [];
+                    if (entries.length > 0 && !typedParams.recursive) {
+                      result = `DRY RUN: Would fail to delete non-empty directory ${dirPath}. Use recursive=true to delete with contents.`;
+                    } else {
+                      result = `DRY RUN: Would delete directory ${dirPath}${typedParams.recursive ? ' and all its contents' : ''}`;
+                    }
+                  } else {
+                    if (!existsSync(dirPath)) {
+                      result = `Directory not found: ${dirPath}`;
+                    } else {
+                      const entries = await fs.readdir(dirPath);
+                      if (entries.length > 0 && !typedParams.recursive) {
+                        result = `Error: Directory is not empty: ${dirPath}. Use recursive=true to delete non-empty directories.`;
+                        success = false;
+                      } else {
+                        if (typedParams.recursive) {
+                          await fs.rm(dirPath, { recursive: true, force: true });
+                        } else {
+                          await fs.rmdir(dirPath);
+                        }
+                        result = `Directory deleted: ${dirPath}${typedParams.recursive ? ' (including all contents)' : ''}`;
+                      }
+                    }
+                  }
+                } else {
+                  result = 'Error: Missing required parameter (path) for delete_directory operation';
+                  success = false;
+                }
+                break;
+                
+              default:
+                result = `Unsupported operation type: ${operation.type}`;
+                success = false;
+            }
+            
+            results.push({
+              operation: operation.type,
+              index,
+              status: 'success',
+              result,
+            });
+          } catch (error) {
+            results.push({
+              operation: operation.type,
+              index,
+              status: 'error',
+              error: error instanceof Error ? error.message : String(error),
+            });
+            
+            success = false;
+            if (!continue_on_error) {
+              break;
+            }
+          }
+        }
+        
+        // Format the results
+        const formattedResults = results.map(r => 
+          `Operation ${r.index + 1} (${r.operation}): ${r.status === 'success' ? '✅ ' + r.result : '❌ ' + r.error}`
+        ).join('\n\n');
+        
+        return `Batch operations ${dry_run ? '(DRY RUN) ' : ''}completed with ${success ? 'success' : 'errors'}.\n\n${formattedResults}`;
+      } catch (error) {
+        return handleError(error, 'Failed to execute batch operations');
       }
     },
   });
