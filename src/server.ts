@@ -5,11 +5,138 @@ import path from 'path';
 import { existsSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import os from 'os';
 
 const execAsync = promisify(exec);
 
 // Required model for the tool to function
 const REQUIRED_MODEL = 'deepseek-r1';
+
+/**
+ * Project Context Manager for intelligent file operations
+ */
+class ProjectContextManager {
+  private static instance: ProjectContextManager;
+  private projectRegistry: Map<string, { path: string, metadata: any }> = new Map();
+  private currentProject: string | null = null;
+  private toolDirectories: Set<string> = new Set();
+  
+  private constructor() {
+    // Initialize known tool directories
+    this.toolDirectories.add(path.resolve(process.cwd()));
+    this.toolDirectories.add(path.resolve(process.cwd(), 'tanukimcp-thought'));
+  }
+  
+  public static getInstance(): ProjectContextManager {
+    if (!ProjectContextManager.instance) {
+      ProjectContextManager.instance = new ProjectContextManager();
+    }
+    return ProjectContextManager.instance;
+  }
+  
+  /**
+   * Detect if a path is within a tool directory rather than a user project
+   */
+  public isToolDirectory(dirPath: string): boolean {
+    const normalized = path.resolve(dirPath);
+    return Array.from(this.toolDirectories).some(toolDir => 
+      normalized === toolDir || normalized.startsWith(toolDir + path.sep)
+    );
+  }
+  
+  /**
+   * Create a proper project directory based on project name
+   * Returns the full path to the created project directory
+   */
+  public createProjectDirectory(projectName: string): string {
+    // Sanitize project name for directory creation
+    const sanitizedName = projectName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    
+    // Create projects directory in user's home directory
+    const projectsDir = path.join(os.homedir(), 'projects');
+    if (!existsSync(projectsDir)) {
+      fs.mkdir(projectsDir, { recursive: true }).catch(err => console.error('Error creating projects directory:', err));
+    }
+    
+    // Create the specific project directory
+    const projectDir = path.join(projectsDir, sanitizedName);
+    if (!existsSync(projectDir)) {
+      fs.mkdir(projectDir, { recursive: true }).catch(err => console.error('Error creating project directory:', err));
+    }
+    
+    // Register the project
+    this.projectRegistry.set(projectName, { 
+      path: projectDir,
+      metadata: { created: new Date().toISOString() }
+    });
+    
+    // Set as current project
+    this.currentProject = projectName;
+    
+    return projectDir;
+  }
+  
+  /**
+   * Intelligently resolve a path based on project context
+   */
+  public resolvePath(workspaceRoot: string, targetPath: string, projectHint?: string): string {
+    // If we detect we're in a tool directory, try to use a project directory instead
+    if (this.isToolDirectory(workspaceRoot)) {
+      console.log('*** ProjectContextManager: Detected tool directory, using project context instead ***');
+      console.log(`*** Current workspace: ${workspaceRoot} ***`);
+      
+      // If we have a current project context, use that
+      if (this.currentProject && this.projectRegistry.has(this.currentProject)) {
+        const projectPath = this.projectRegistry.get(this.currentProject)!.path;
+        console.log(`*** Using existing project context: ${this.currentProject} at ${projectPath} ***`);
+        return path.resolve(projectPath, targetPath);
+      }
+      
+      // If we have a project hint, try to create a directory for it
+      if (projectHint) {
+        const projectDir = this.createProjectDirectory(projectHint);
+        console.log(`*** Created new project directory for: ${projectHint} at ${projectDir} ***`);
+        return path.resolve(projectDir, targetPath);
+      }
+      
+      // Fall back to creating a general projects directory
+      const projectsDir = path.join(os.homedir(), 'projects', 'general');
+      console.log(`*** Using general projects directory: ${projectsDir} ***`);
+      if (!existsSync(projectsDir)) {
+        fs.mkdir(projectsDir, { recursive: true }).catch(err => console.error('Error creating general projects directory:', err));
+      }
+      return path.resolve(projectsDir, targetPath);
+    }
+    
+    // Standard path resolution if not in a tool directory
+    console.log('*** ProjectContextManager: Using standard path resolution ***');
+    const projectRoot = userConfig.projectRoot || process.env.PROJECT_ROOT || process.cwd();
+    const effectiveRoot = path.isAbsolute(workspaceRoot) ? 
+      workspaceRoot : 
+      path.resolve(projectRoot, workspaceRoot);
+    
+    const resolved = path.resolve(effectiveRoot, targetPath);
+    console.log(`*** Resolved path: ${resolved} ***`);
+    
+    // Security check to ensure the path is within the effective root
+    if (!resolved.startsWith(effectiveRoot)) {
+      throw new Error(`Path ${targetPath} is outside the workspace root (${effectiveRoot})`);
+    }
+    
+    return resolved;
+  }
+  
+  /**
+   * Set current project context
+   */
+  public setCurrentProject(projectName: string, projectPath: string): void {
+    this.projectRegistry.set(projectName, { path: projectPath, metadata: {} });
+    this.currentProject = projectName;
+  }
+}
 
 /**
  * Interface to represent a todolist item
@@ -254,8 +381,8 @@ export function createTanukiServer() {
           return 'Error: Unstructured thoughts cannot be empty.';
         }
         
-        // Resolve the output file path relative to the workspace root
-        const resolvedOutputPath = resolveWorkspacePath(workspace_root, output_file);
+        // Resolve the output file path relative to the workspace root with project context
+        const resolvedOutputPath = resolveWorkspacePath(workspace_root, output_file, project_description);
         
         // Check for file existence
         if (!overwrite && await fileExists(resolvedOutputPath)) {
@@ -313,6 +440,12 @@ export function createTanukiServer() {
         
         // Write the todolist to file
         await fs.writeFile(resolvedOutputPath, todolist, 'utf-8');
+        
+        // Set current project context after successful file creation
+        ProjectContextManager.getInstance().setCurrentProject(
+          project_description,
+          path.dirname(resolvedOutputPath)
+        );
         
         return `Successfully created todolist and saved to "${resolvedOutputPath}".\n\n${todolist}`;
       } catch (error) {
@@ -1299,23 +1432,9 @@ export function createTanukiServer() {
   }
 
   // Helper to resolve and validate paths within workspace
-  function resolveWorkspacePath(workspaceRoot: string, targetPath: string): string {
-    // Use project root from config, environment variable, or current directory in that order
-    const projectRoot = userConfig.projectRoot || process.env.PROJECT_ROOT || process.cwd();
-    
-    // Use the specified workspace root if it's absolute, otherwise resolve it relative to project root
-    const effectiveRoot = path.isAbsolute(workspaceRoot) ? 
-      workspaceRoot : 
-      path.resolve(projectRoot, workspaceRoot);
-    
-    const resolved = path.resolve(effectiveRoot, targetPath);
-    
-    // Ensure the path is within the effective root for security
-    if (!resolved.startsWith(effectiveRoot)) {
-      throw new Error(`Path ${targetPath} is outside the workspace root (${effectiveRoot})`);
-    }
-    
-    return resolved;
+  function resolveWorkspacePath(workspaceRoot: string, targetPath: string, projectHint?: string): string {
+    // Use the ProjectContextManager for intelligent path resolution
+    return ProjectContextManager.getInstance().resolvePath(workspaceRoot, targetPath, projectHint);
   }
 
   // CREATE FILE
