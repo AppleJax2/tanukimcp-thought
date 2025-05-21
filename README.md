@@ -177,7 +177,8 @@ Create a `tanuki-config.json` file in your project directory to customize the LL
        "top_p": 0.9,
        "num_thread": 8
      },
-     "autoCreateConfig": true
+     "autoCreateConfig": true,
+     "projectRoot": "/path/to/your/project"
    }
    ```
 3. Customize any parameters as needed:
@@ -186,6 +187,8 @@ Create a `tanuki-config.json` file in your project directory to customize the LL
    - `temperature`: Controls randomness (0.0-1.0, lower values = more deterministic output)
    - `top_p`: Controls diversity (0.0-1.0, higher values = more diverse output)
    - `num_thread`: Number of CPU threads to use (adjust based on your hardware)
+
+The `projectRoot` option (default: current working directory) specifies the base directory for all file operations. This is useful when you're running the MCP server from a different directory than your project.
 
 ### Connecting Cursor to Your Local MCP Server
 
@@ -634,7 +637,8 @@ You can customize the model and its parameters by creating a `tanuki-config.json
     "top_p": 0.9,
     "num_thread": 8
   },
-  "autoCreateConfig": true
+  "autoCreateConfig": true,
+  "projectRoot": "/path/to/your/project"
 }
 ```
 
@@ -647,6 +651,8 @@ The `ollamaParams` object supports the following configuration options:
 - `num_thread`: Number of threads to use for computation (default: 8)
 
 The `autoCreateConfig` flag (default: true) automatically creates this configuration file with optimal settings if it doesn't exist.
+
+The `projectRoot` option (default: current working directory) specifies the base directory for all file operations. This is useful when you're running the MCP server from a different directory than your project.
 
 ## 🧠 LLM Integration
 

@@ -46,6 +46,7 @@ interface Config {
   llmModel: string;
   ollamaParams?: OllamaParams;
   autoCreateConfig?: boolean;
+  projectRoot?: string;  // Add project root path configuration
 }
 
 // Default configuration
@@ -54,9 +55,11 @@ const defaultConfig: Config = {
   ollamaParams: {
     num_ctx: 16384,
     temperature: 0.7,
+    top_p: 0.9,
     num_thread: 8
   },
-  autoCreateConfig: true
+  autoCreateConfig: true,
+  projectRoot: process.cwd()  // Default to current working directory
 };
 
 // Load user config without any async operations during initialization
@@ -80,14 +83,15 @@ async function createDefaultConfigFile() {
     if (!existsSync('tanuki-config.json') && defaultConfig.autoCreateConfig) {
       const configContent = JSON.stringify({
         llmModel: defaultConfig.llmModel,
-        ollamaParams: defaultConfig.ollamaParams
+        ollamaParams: defaultConfig.ollamaParams,
+        projectRoot: defaultConfig.projectRoot
       }, null, 2);
       
       await fs.writeFile('tanuki-config.json', configContent, 'utf-8');
       console.log('Created default configuration file: tanuki-config.json');
     }
   } catch (error) {
-    console.error('Failed to create default configuration file:', error);
+    console.error('Error creating default config file:', error);
   }
 }
 
@@ -1247,11 +1251,21 @@ export function createTanukiServer() {
 
   // Helper to resolve and validate paths within workspace
   function resolveWorkspacePath(workspaceRoot: string, targetPath: string): string {
-    const resolved = path.resolve(workspaceRoot, targetPath);
-    const root = path.resolve(workspaceRoot);
-    if (!resolved.startsWith(root)) {
-      throw new Error(`Path ${targetPath} is outside the workspace root (${workspaceRoot})`);
+    // Use project root from config, environment variable, or current directory in that order
+    const projectRoot = userConfig.projectRoot || process.env.PROJECT_ROOT || process.cwd();
+    
+    // Use the specified workspace root if it's absolute, otherwise resolve it relative to project root
+    const effectiveRoot = path.isAbsolute(workspaceRoot) ? 
+      workspaceRoot : 
+      path.resolve(projectRoot, workspaceRoot);
+    
+    const resolved = path.resolve(effectiveRoot, targetPath);
+    
+    // Ensure the path is within the effective root for security
+    if (!resolved.startsWith(effectiveRoot)) {
+      throw new Error(`Path ${targetPath} is outside the workspace root (${effectiveRoot})`);
     }
+    
     return resolved;
   }
 

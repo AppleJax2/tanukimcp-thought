@@ -1,10 +1,19 @@
 import { createTanukiServer } from './server.js';
+import path from 'path';
+import fs from 'fs/promises';
 
 /**
  * Main entry point for the tanukimcp-thought MCP server
  * This automatically starts the server in stdio mode
  */
 console.log('🚀 Starting Tanuki Sequential Thought MCP Server (stdio mode)...');
+
+// Set project root to current directory if not already set
+// This ensures file operations are always relative to where the server was started
+if (!process.env.PROJECT_ROOT) {
+  process.env.PROJECT_ROOT = process.cwd();
+  console.log(`📂 Project root set to: ${process.env.PROJECT_ROOT}`);
+}
 
 // Create and start the server
 const server = createTanukiServer();
