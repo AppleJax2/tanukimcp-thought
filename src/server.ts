@@ -227,12 +227,23 @@ export function createTanukiServer() {
     parameters: z.object({
       project_description: z.string().describe('Brief description of the project'),
       unstructured_thoughts: z.string().describe('Unstructured thoughts, ideas, and considerations about the project'),
-      output_file: z.string().optional().describe('Optional file path to save the todolist (default: tooltodo.md)'),
+      output_file: z.string().optional().describe('Optional file path to save the todolist (default: <project>_todo.md)'),
       overwrite: z.boolean().optional().describe('Whether to overwrite if file exists (default: false)'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
     }),
     execute: async (args) => {
       try {
-        const { project_description, unstructured_thoughts, output_file = 'tooltodo.md', overwrite = false } = args;
+        const { project_description, unstructured_thoughts, overwrite = false, workspace_root = '.' } = args;
+        
+        // Generate a file name based on the project description if not provided
+        // Sanitize the project name to create a valid filename
+        const sanitizedProjectName = project_description
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .substring(0, 30); // Limit length
+          
+        const output_file = args.output_file || `${sanitizedProjectName}_todo.md`;
         
         // Validate inputs
         if (!project_description.trim()) {
@@ -243,9 +254,12 @@ export function createTanukiServer() {
           return 'Error: Unstructured thoughts cannot be empty.';
         }
         
+        // Resolve the output file path relative to the workspace root
+        const resolvedOutputPath = resolveWorkspacePath(workspace_root, output_file);
+        
         // Check for file existence
-        if (!overwrite && await fileExists(output_file)) {
-          return `Error: File "${output_file}" already exists. Set overwrite=true to overwrite.`;
+        if (!overwrite && await fileExists(resolvedOutputPath)) {
+          return `Error: File "${resolvedOutputPath}" already exists. Set overwrite=true to overwrite.`;
         }
         
         // Check if running in hosted environment
@@ -256,12 +270,12 @@ export function createTanukiServer() {
           // Still write the todolist to file so it can be used in subsequent steps
           try {
             // Ensure the output directory exists
-            const dir = path.dirname(output_file);
-            if (dir !== '.' && !existsSync(dir)) {
+            const dir = path.dirname(resolvedOutputPath);
+            if (!existsSync(dir)) {
               await fs.mkdir(dir, { recursive: true });
             }
             
-            await fs.writeFile(output_file, todolist, 'utf-8');
+            await fs.writeFile(resolvedOutputPath, todolist, 'utf-8');
           } catch (fileError) {
             console.warn('Could not write todolist to file in hosted environment:', fileError);
           }
@@ -277,13 +291,13 @@ export function createTanukiServer() {
           const todolist = generateTodoWithRules(project_description, unstructured_thoughts);
           
           // Ensure the output directory exists
-          const dir = path.dirname(output_file);
-          if (dir !== '.' && !existsSync(dir)) {
+          const dir = path.dirname(resolvedOutputPath);
+          if (!existsSync(dir)) {
             await fs.mkdir(dir, { recursive: true });
           }
           
           // Write the todolist to file
-          await fs.writeFile(output_file, todolist, 'utf-8');
+          await fs.writeFile(resolvedOutputPath, todolist, 'utf-8');
           
           return `This tool requires Ollama and the deepseek-r1 model to be installed locally. Using rule-based fallback.\n\n${todolist}`;
         }
@@ -292,15 +306,15 @@ export function createTanukiServer() {
         const todolist = await generateTodoWithLLM(project_description, unstructured_thoughts);
         
         // Ensure the output directory exists
-        const dir = path.dirname(output_file);
-        if (dir !== '.' && !existsSync(dir)) {
+        const dir = path.dirname(resolvedOutputPath);
+        if (!existsSync(dir)) {
           await fs.mkdir(dir, { recursive: true });
         }
         
         // Write the todolist to file
-        await fs.writeFile(output_file, todolist, 'utf-8');
+        await fs.writeFile(resolvedOutputPath, todolist, 'utf-8');
         
-        return `Successfully created todolist and saved to "${output_file}".\n\n${todolist}`;
+        return `Successfully created todolist and saved to "${resolvedOutputPath}".\n\n${todolist}`;
       } catch (error) {
         return handleError(error, 'Failed to create and save todolist');
       }
@@ -461,17 +475,23 @@ export function createTanukiServer() {
       input_file: z.string().describe('Path to the existing todolist file'),
       output_file: z.string().optional().describe('Optional file path to save the enhanced todolist (defaults to overwriting input file)'),
       overwrite: z.boolean().optional().describe('Whether to overwrite if file exists (default: false)'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
     }),
     execute: async (args) => {
       try {
-        const { input_file, output_file = input_file, overwrite = false } = args;
+        const { input_file, output_file, overwrite = false, workspace_root = '.' } = args;
+        
+        // Resolve the input and output file paths relative to the workspace root
+        const resolvedInputPath = resolveWorkspacePath(workspace_root, input_file);
+        const resolvedOutputPath = output_file ? resolveWorkspacePath(workspace_root, output_file) : resolvedInputPath;
+        
         // Validate file exists
-        if (!(await fileExists(input_file))) {
-          return `Error: Input file "${input_file}" does not exist or is not accessible.`;
+        if (!(await fileExists(resolvedInputPath))) {
+          return `Error: Input file "${resolvedInputPath}" does not exist or is not accessible.`;
         }
         // Check for file existence if output_file exists and is not input_file, or if overwriting input_file
-        if (!overwrite && await fileExists(output_file)) {
-          return `Error: Output file "${output_file}" already exists. Set overwrite=true to overwrite.`;
+        if (!overwrite && resolvedOutputPath !== resolvedInputPath && await fileExists(resolvedOutputPath)) {
+          return `Error: Output file "${resolvedOutputPath}" already exists. Set overwrite=true to overwrite.`;
         }
         // Check Ollama requirements only when the tool is called
         try {
@@ -482,21 +502,21 @@ export function createTanukiServer() {
         }
         
         // Read the existing todolist
-        const existingTodolist = await fs.readFile(input_file, 'utf-8');
+        const existingTodolist = await fs.readFile(resolvedInputPath, 'utf-8');
         
         // Generate enhanced todolist with LLM
         const enhancedTodolist = await enhanceTodoWithLLM(existingTodolist);
         
         // Ensure the output directory exists
-        const dir = path.dirname(output_file);
-        if (dir !== '.' && !existsSync(dir)) {
+        const dir = path.dirname(resolvedOutputPath);
+        if (!existsSync(dir)) {
           await fs.mkdir(dir, { recursive: true });
         }
         
         // Write the enhanced todolist to file
-        await fs.writeFile(output_file, enhancedTodolist, 'utf-8');
+        await fs.writeFile(resolvedOutputPath, enhancedTodolist, 'utf-8');
         
-        return `Successfully enhanced todolist and saved to "${output_file}".\n\n${enhancedTodolist}`;
+        return `Successfully enhanced todolist and saved to "${resolvedOutputPath}".\n\n${enhancedTodolist}`;
       } catch (error) {
         return handleError(error, 'Failed to enhance todolist');
       }
@@ -658,14 +678,18 @@ export function createTanukiServer() {
     description: 'Identify the next logical unchecked task to implement from the todolist.',
     parameters: z.object({
       todolist_file: z.string().describe('Path to the todolist file'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
     }),
     execute: async (args) => {
       try {
-        const { todolist_file } = args;
+        const { todolist_file, workspace_root = '.' } = args;
+        
+        // Resolve the todolist file path relative to the workspace root
+        const resolvedTodolistPath = resolveWorkspacePath(workspace_root, todolist_file);
         
         // Validate file exists
-        if (!(await fileExists(todolist_file))) {
-          return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
+        if (!(await fileExists(resolvedTodolistPath))) {
+          return `Error: Todolist file "${resolvedTodolistPath}" does not exist or is not accessible.`;
         }
         
         // Check Ollama requirements only when the tool is called
@@ -677,7 +701,7 @@ export function createTanukiServer() {
         }
         
         // Read the todolist
-        const todolist = await fs.readFile(todolist_file, 'utf-8');
+        const todolist = await fs.readFile(resolvedTodolistPath, 'utf-8');
         
         // Check if there are any unchecked tasks
         const uncheckedTaskRegex = /- \[ \] (.+)$/m;
@@ -761,19 +785,23 @@ export function createTanukiServer() {
     parameters: z.object({
       task: z.string().describe('The task to plan implementation for'),
       todolist_file: z.string().describe('Path to the todolist file for context'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
     }),
     execute: async (args) => {
       try {
-        const { task, todolist_file } = args;
+        const { task, todolist_file, workspace_root = '.' } = args;
         
         // Validate inputs
         if (!task.trim()) {
           return 'Error: Task description cannot be empty.';
         }
         
+        // Resolve the todolist file path relative to the workspace root
+        const resolvedTodolistPath = resolveWorkspacePath(workspace_root, todolist_file);
+        
         // Validate file exists
-        if (!(await fileExists(todolist_file))) {
-          return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
+        if (!(await fileExists(resolvedTodolistPath))) {
+          return `Error: Todolist file "${resolvedTodolistPath}" does not exist or is not accessible.`;
         }
         
         // Check Ollama requirements only when the tool is called
@@ -785,7 +813,7 @@ export function createTanukiServer() {
         }
         
         // Read the todolist for context
-        const todolist = await fs.readFile(todolist_file, 'utf-8');
+        const todolist = await fs.readFile(resolvedTodolistPath, 'utf-8');
         
         // Check if the task exists in the todolist
         if (!todolist.includes(task)) {
@@ -863,23 +891,27 @@ export function createTanukiServer() {
     parameters: z.object({
       task: z.string().describe('The task text to mark as complete'),
       todolist_file: z.string().describe('Path to the todolist file'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
     }),
     execute: async (args) => {
       try {
-        const { task, todolist_file } = args;
+        const { task, todolist_file, workspace_root = '.' } = args;
         
         // Validate inputs
         if (!task.trim()) {
           return 'Error: Task description cannot be empty.';
         }
         
+        // Resolve the todolist file path relative to the workspace root
+        const resolvedTodolistPath = resolveWorkspacePath(workspace_root, todolist_file);
+        
         // Validate file exists
-        if (!(await fileExists(todolist_file))) {
-          return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
+        if (!(await fileExists(resolvedTodolistPath))) {
+          return `Error: Todolist file "${resolvedTodolistPath}" does not exist or is not accessible.`;
         }
         
         // Read the todolist
-        const todolist = await fs.readFile(todolist_file, 'utf-8');
+        const todolist = await fs.readFile(resolvedTodolistPath, 'utf-8');
         
         // Create a regex to find the exact task
         const taskRegex = new RegExp(`- \\[ \\] ${task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
@@ -891,7 +923,7 @@ export function createTanukiServer() {
         }
         
         // Write the updated todolist
-        await fs.writeFile(todolist_file, updatedTodolist, 'utf-8');
+        await fs.writeFile(resolvedTodolistPath, updatedTodolist, 'utf-8');
         
         return `Successfully marked task "${task}" as complete.\n\nUpdated todolist:\n${updatedTodolist}`;
       } catch (error) {
@@ -910,19 +942,24 @@ export function createTanukiServer() {
       implementation_plan: z.string().optional().describe('Optional implementation plan for the task. If not provided, a plan will be generated.'),
       target_directory: z.string().optional().describe('Optional target directory for file operations. Defaults to current directory.'),
       validate_plan: z.boolean().optional().describe('Whether to only validate and preview the plan without executing it (default: false)'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
     }),
     execute: async (args) => {
       try {
-        const { task, todolist_file, implementation_plan, target_directory = '.', validate_plan = false } = args;
+        const { task, todolist_file, implementation_plan, target_directory = '.', validate_plan = false, workspace_root = '.' } = args;
         
         // Validate inputs
         if (!task.trim()) {
           return 'Error: Task description cannot be empty.';
         }
         
-        // Validate file exists
-        if (!(await fileExists(todolist_file))) {
-          return `Error: Todolist file "${todolist_file}" does not exist or is not accessible.`;
+        // Resolve the todolist file path and target directory relative to the workspace root
+        const resolvedTodolistPath = resolveWorkspacePath(workspace_root, todolist_file);
+        const resolvedTargetDirectory = resolveWorkspacePath(workspace_root, target_directory);
+        
+        // Validate todolist file exists
+        if (!(await fileExists(resolvedTodolistPath))) {
+          return `Error: Todolist file "${resolvedTodolistPath}" does not exist or is not accessible.`;
         }
         
         // Check Ollama requirements only when the tool is called
@@ -934,7 +971,7 @@ export function createTanukiServer() {
         }
         
         // Read the todolist for context
-        const todolist = await fs.readFile(todolist_file, 'utf-8');
+        const todolist = await fs.readFile(resolvedTodolistPath, 'utf-8');
         
         // If implementation plan not provided, generate one
         let executionPlan = implementation_plan;
@@ -955,7 +992,7 @@ export function createTanukiServer() {
             switch (action.type) {
               case 'create_file':
                 if (action.path && action.content) {
-                  const filePath = path.join(target_directory, action.path);
+                  const filePath = path.join(resolvedTargetDirectory, action.path);
                   const fileExists = existsSync(filePath);
                   actionPreviews.push(`CREATE FILE: ${filePath}${fileExists ? ' (exists, will be overwritten)' : ''}\n` +
                     `Content length: ${action.content.length} characters\n` +
@@ -967,7 +1004,7 @@ export function createTanukiServer() {
                 
               case 'edit_file':
                 if (action.path && action.changes) {
-                  const filePath = path.join(target_directory, action.path);
+                  const filePath = path.join(resolvedTargetDirectory, action.path);
                   const fileExists = existsSync(filePath);
                   if (fileExists) {
                     const changes = action.changes.map((c: any) => {
@@ -989,7 +1026,7 @@ export function createTanukiServer() {
                 
               case 'delete_file':
                 if (action.path) {
-                  const filePath = path.join(target_directory, action.path);
+                  const filePath = path.join(resolvedTargetDirectory, action.path);
                   const fileExists = existsSync(filePath);
                   actionPreviews.push(`DELETE FILE: ${filePath}${fileExists ? '' : ' (does not exist, operation will fail)'}`);
                 } else {
@@ -999,8 +1036,8 @@ export function createTanukiServer() {
                 
               case 'move_file':
                 if (action.from && action.to) {
-                  const fromPath = path.join(target_directory, action.from);
-                  const toPath = path.join(target_directory, action.to);
+                  const fromPath = path.join(resolvedTargetDirectory, action.from);
+                  const toPath = path.join(resolvedTargetDirectory, action.to);
                   const fromExists = existsSync(fromPath);
                   const toExists = existsSync(toPath);
                   
@@ -1014,8 +1051,8 @@ export function createTanukiServer() {
                 
               case 'copy_file':
                 if (action.from && action.to) {
-                  const fromPath = path.join(target_directory, action.from);
-                  const toPath = path.join(target_directory, action.to);
+                  const fromPath = path.join(resolvedTargetDirectory, action.from);
+                  const toPath = path.join(resolvedTargetDirectory, action.to);
                   const fromExists = existsSync(fromPath);
                   const toExists = existsSync(toPath);
                   
@@ -1033,14 +1070,14 @@ export function createTanukiServer() {
           }
           
           return `Plan validation for task "${task}":\n\n` +
-                 `This plan would perform ${actions.length} operations in "${target_directory}":\n\n` +
+                 `This plan would perform ${actions.length} operations in "${resolvedTargetDirectory}":\n\n` +
                  actionPreviews.join('\n\n') + 
                  '\n\nTo execute this plan, run again without validate_plan=true or with validate_plan=false.';
         }
         
         // Execute the implementation plan
         console.log(`Executing plan for task: ${task}`);
-        const executionResult = await executeImplementationPlan(task, executionPlan, target_directory);
+        const executionResult = await executeImplementationPlan(task, executionPlan, resolvedTargetDirectory);
         
         // If execution was successful, mark task as complete
         if (executionResult.success) {
@@ -1051,7 +1088,7 @@ export function createTanukiServer() {
           // Check if any replacements were made
           if (todolist !== updatedTodolist) {
             // Write the updated todolist
-            await fs.writeFile(todolist_file, updatedTodolist, 'utf-8');
+            await fs.writeFile(resolvedTodolistPath, updatedTodolist, 'utf-8');
             
             return `Task "${task}" has been successfully implemented and marked as complete.\n\n` +
                    `Implementation Summary:\n${executionResult.summary}\n\n` +
@@ -1211,11 +1248,17 @@ export function createTanukiServer() {
       
       // Fallback function to create minimal action set
       const createMinimalActionSet = () => {
+        const sanitizedTaskName = task
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .substring(0, 30);
+          
         return Promise.resolve(JSON.stringify([
           {
             type: 'create_file',
             description: `Implementation for task: ${task} (fallback action)`,
-            path: `implementation_${task.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.md`,
+            path: `implementation_${sanitizedTaskName}.md`,
             content: `# Implementation Plan for "${task}"\n\n${plan}\n\n> Note: This is a fallback implementation as the detailed action parsing failed.`
           }
         ]));
@@ -1238,11 +1281,17 @@ export function createTanukiServer() {
     } catch (error) {
       console.error("Error parsing plan into actions:", error);
       // Return a minimal set of actions based on the plan without LLM parsing
+      const sanitizedTaskName = task
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .substring(0, 30);
+      
       return [
         {
           type: 'create_file',
           description: `Implementation for task: ${task} (fallback action)`,
-          path: `implementation_${task.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}.md`,
+          path: `implementation_${sanitizedTaskName}.md`,
           content: `# Implementation Plan for "${task}"\n\n${plan}\n\n> Note: This is a fallback implementation as the detailed action parsing failed.`
         }
       ];

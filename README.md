@@ -14,11 +14,11 @@ Transform disorganized thoughts into structured, executable tasks with productio
    
    # Then enhance with details
    Now please use the mcp_tanukimcp-thought_enhance_todolist tool with these parameters:
-   input_file: "tooltodo.md"
+   input_file: "task_management_application_todo.md"
    
    # Finally, build the project file by file
    Please execute the following sequence until all tasks are complete:
-   1. Use mcp_tanukimcp-thought_find_next_task with todolist_file: "tooltodo.md"
+   1. Use mcp_tanukimcp-thought_find_next_task with todolist_file: "task_management_application_todo.md"
    2. Use mcp_tanukimcp-thought_plan_task_implementation with the identified task
    3. Use mcp_tanukimcp-thought_task_executor with the same task
    ```
@@ -373,7 +373,7 @@ mcp_tanukimcp-thought_brain_dump_organize
 **Parameters**:
 - `project_description`: Brief description of the project
 - `unstructured_thoughts`: Your raw, messy thoughts and ideas
-- `output_file`: (Optional) Where to save the todolist (default: "tooltodo.md")
+- `output_file`: (Optional) Where to save the todolist (default: "<project>_todo.md")
 - `overwrite`: (Optional) Whether to overwrite existing file (default: false)
 
 **Returns**: A structured markdown todolist organized into logical categories
@@ -413,7 +413,7 @@ mcp_tanukimcp-thought_enhance_todolist
 **Example**:
 ```
 Please use mcp_tanukimcp-thought_enhance_todolist with:
-input_file: "tooltodo.md"
+input_file: "task_management_application_todo.md"
 ```
 
 ### 3. Find Next Task
@@ -437,7 +437,7 @@ mcp_tanukimcp-thought_find_next_task
 **Example**:
 ```
 Please use mcp_tanukimcp-thought_find_next_task with:
-todolist_file: "tooltodo.md"
+todolist_file: "task_management_application_todo.md"
 ```
 
 ### 4. Plan Task Implementation
@@ -463,7 +463,7 @@ mcp_tanukimcp-thought_plan_task_implementation
 ```
 Please use mcp_tanukimcp-thought_plan_task_implementation with:
 task: "Create user authentication system"
-todolist_file: "tooltodo.md"
+todolist_file: "task_management_application_todo.md"
 ```
 
 ### 5. Task Executor
@@ -491,7 +491,7 @@ mcp_tanukimcp-thought_task_executor
 ```
 Please use mcp_tanukimcp-thought_task_executor with:
 task: "Create user authentication system"
-todolist_file: "tooltodo.md"
+todolist_file: "task_management_application_todo.md"
 target_directory: "./my_project"
 ```
 
@@ -518,7 +518,7 @@ mcp_tanukimcp-thought_mark_task_complete
 ```
 Please use mcp_tanukimcp-thought_mark_task_complete with:
 task: "Create user authentication system"
-todolist_file: "tooltodo.md"
+todolist_file: "task_management_application_todo.md"
 ```
 
 ### 7. Direct CRUD Tools
@@ -561,7 +561,7 @@ unstructured_thoughts: "- Need to fetch weather data from an API
 
 ```
 Now please use the enhance_todolist tool with these parameters:
-input_file: "tooltodo.md"
+input_file: "task_management_application_todo.md"
 ```
 
 #### 3. Sequential implementation
@@ -569,17 +569,17 @@ input_file: "tooltodo.md"
 ```
 # Find the next task to implement
 Please use the find_next_task tool with:
-todolist_file: "tooltodo.md"
+todolist_file: "weather_app_todo.md"
 
 # Create a plan for implementing that task
 Then use the plan_task_implementation tool with:
 task: "[the task identified by find_next_task]"
-todolist_file: "tooltodo.md"
+todolist_file: "weather_app_todo.md"
 
 # Execute the plan to create/edit files
 Finally, use the task_executor tool with:
 task: "[same task as above]"
-todolist_file: "tooltodo.md"
+todolist_file: "weather_app_todo.md"
 target_directory: "./WeatherApp"
 ```
 
@@ -588,9 +588,9 @@ target_directory: "./WeatherApp"
 ```
 # Repeat the process for each task
 Please continue using this sequence of tools:
-1. find_next_task with todolist_file: "tooltodo.md"
-2. plan_task_implementation with the identified task and todolist_file: "tooltodo.md"
-3. task_executor with the same task, todolist_file: "tooltodo.md", and target_directory: "./WeatherApp"
+1. find_next_task with todolist_file: "weather_app_todo.md"
+2. plan_task_implementation with the identified task and todolist_file: "weather_app_todo.md"
+3. task_executor with the same task, todolist_file: "weather_app_todo.md", and target_directory: "./WeatherApp"
 
 Repeat until all tasks are complete.
 ```
