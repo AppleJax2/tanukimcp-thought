@@ -219,15 +219,16 @@ export function createTanukiServer() {
   // Phase 1: Brain Dump & Initial Organization
   server.addTool({
     name: 'brain_dump_organize',
-    description: 'Transform unstructured thoughts into a structured markdown todolist.',
+    description: 'Transform unstructured thoughts into a structured markdown todolist. Will not overwrite existing files unless overwrite=true.',
     parameters: z.object({
       project_description: z.string().describe('Brief description of the project'),
       unstructured_thoughts: z.string().describe('Unstructured thoughts, ideas, and considerations about the project'),
       output_file: z.string().optional().describe('Optional file path to save the todolist (default: tooltodo.md)'),
+      overwrite: z.boolean().optional().describe('Whether to overwrite if file exists (default: false)'),
     }),
     execute: async (args) => {
       try {
-        const { project_description, unstructured_thoughts, output_file = 'tooltodo.md' } = args;
+        const { project_description, unstructured_thoughts, output_file = 'tooltodo.md', overwrite = false } = args;
         
         // Validate inputs
         if (!project_description.trim()) {
@@ -236,6 +237,11 @@ export function createTanukiServer() {
         
         if (!unstructured_thoughts.trim()) {
           return 'Error: Unstructured thoughts cannot be empty.';
+        }
+        
+        // Check for file existence
+        if (!overwrite && await fileExists(output_file)) {
+          return `Error: File "${output_file}" already exists. Set overwrite=true to overwrite.`;
         }
         
         // Check if running in hosted environment
@@ -446,20 +452,23 @@ export function createTanukiServer() {
   // Phase 2: Enhance & Refine
   server.addTool({
     name: 'enhance_todolist',
-    description: 'Enhance an existing todolist with more detailed specifications, acceptance criteria, and technical requirements.',
+    description: 'Enhance an existing todolist with more detailed specifications, acceptance criteria, and technical requirements. Will not overwrite existing files unless overwrite=true.',
     parameters: z.object({
       input_file: z.string().describe('Path to the existing todolist file'),
       output_file: z.string().optional().describe('Optional file path to save the enhanced todolist (defaults to overwriting input file)'),
+      overwrite: z.boolean().optional().describe('Whether to overwrite if file exists (default: false)'),
     }),
     execute: async (args) => {
       try {
-        const { input_file, output_file = input_file } = args;
-        
+        const { input_file, output_file = input_file, overwrite = false } = args;
         // Validate file exists
         if (!(await fileExists(input_file))) {
           return `Error: Input file "${input_file}" does not exist or is not accessible.`;
         }
-        
+        // Check for file existence if output_file exists and is not input_file, or if overwriting input_file
+        if (!overwrite && await fileExists(output_file)) {
+          return `Error: Output file "${output_file}" already exists. Set overwrite=true to overwrite.`;
+        }
         // Check Ollama requirements only when the tool is called
         try {
           await ensureOllamaRequirements();
@@ -1139,6 +1148,180 @@ export function createTanukiServer() {
       ];
     }
   }
+
+  // Helper to resolve and validate paths within workspace
+  function resolveWorkspacePath(workspaceRoot: string, targetPath: string): string {
+    const resolved = path.resolve(workspaceRoot, targetPath);
+    const root = path.resolve(workspaceRoot);
+    if (!resolved.startsWith(root)) {
+      throw new Error(`Path ${targetPath} is outside the workspace root (${workspaceRoot})`);
+    }
+    return resolved;
+  }
+
+  // CREATE FILE
+  server.addTool({
+    name: 'create_file',
+    description: 'Create a new file with the specified content in the workspace.',
+    parameters: z.object({
+      path: z.string().describe('Relative path to the file to create'),
+      content: z.string().describe('Content to write to the file'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      overwrite: z.boolean().optional().describe('Whether to overwrite if file exists (default: false)'),
+    }),
+    execute: async (args) => {
+      try {
+        const { path: relPath, content, workspace_root = '.', overwrite = false } = args;
+        const filePath = resolveWorkspacePath(workspace_root, relPath);
+        const dir = path.dirname(filePath);
+        if (!existsSync(dir)) {
+          await fs.mkdir(dir, { recursive: true });
+        }
+        if (!overwrite && await fileExists(filePath)) {
+          return `Error: File already exists at ${filePath}. Set overwrite=true to overwrite.`;
+        }
+        await fs.writeFile(filePath, content, 'utf-8');
+        return `File created at ${filePath}`;
+      } catch (error) {
+        return handleError(error, 'Failed to create file');
+      }
+    },
+  });
+
+  // EDIT FILE
+  server.addTool({
+    name: 'edit_file',
+    description: 'Edit an existing file by applying changes (replace, append, prepend, insert_at_line).',
+    parameters: z.object({
+      path: z.string().describe('Relative path to the file to edit'),
+      changes: z.array(z.object({
+        type: z.enum(['replace', 'append', 'prepend', 'insert_at_line']),
+        old: z.string().optional(),
+        new: z.string().optional(),
+        content: z.string().optional(),
+        line: z.number().optional(),
+      })).describe('Array of changes to apply'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+    }),
+    execute: async (args) => {
+      try {
+        const { path: relPath, changes, workspace_root = '.' } = args;
+        const filePath = resolveWorkspacePath(workspace_root, relPath);
+        if (!await fileExists(filePath)) {
+          return `Error: File not found: ${filePath}`;
+        }
+        let content = await fs.readFile(filePath, 'utf-8');
+        for (const change of changes) {
+          if (change.type === 'replace' && change.old && change.new) {
+            content = content.replace(change.old, change.new);
+          } else if (change.type === 'append' && change.content) {
+            content += change.content;
+          } else if (change.type === 'prepend' && change.content) {
+            content = change.content + content;
+          } else if (change.type === 'insert_at_line' && change.line !== undefined && change.content) {
+            const lines = content.split('\n');
+            if (change.line >= 0 && change.line <= lines.length) {
+              lines.splice(change.line, 0, change.content);
+              content = lines.join('\n');
+            }
+          }
+        }
+        await fs.writeFile(filePath, content, 'utf-8');
+        return `File edited at ${filePath}`;
+      } catch (error) {
+        return handleError(error, 'Failed to edit file');
+      }
+    },
+  });
+
+  // DELETE FILE
+  server.addTool({
+    name: 'delete_file',
+    description: 'Delete a file from the workspace.',
+    parameters: z.object({
+      path: z.string().describe('Relative path to the file to delete'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+    }),
+    execute: async (args) => {
+      try {
+        const { path: relPath, workspace_root = '.' } = args;
+        const filePath = resolveWorkspacePath(workspace_root, relPath);
+        if (!await fileExists(filePath)) {
+          return `File not found: ${filePath}`;
+        }
+        await fs.unlink(filePath);
+        return `File deleted: ${filePath}`;
+      } catch (error) {
+        return handleError(error, 'Failed to delete file');
+      }
+    },
+  });
+
+  // MOVE FILE
+  server.addTool({
+    name: 'move_file',
+    description: 'Move a file from one location to another within the workspace.',
+    parameters: z.object({
+      from: z.string().describe('Relative path to the source file'),
+      to: z.string().describe('Relative path to the destination'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      overwrite: z.boolean().optional().describe('Whether to overwrite if destination exists (default: false)'),
+    }),
+    execute: async (args) => {
+      try {
+        const { from, to, workspace_root = '.', overwrite = false } = args;
+        const fromPath = resolveWorkspacePath(workspace_root, from);
+        const toPath = resolveWorkspacePath(workspace_root, to);
+        if (!await fileExists(fromPath)) {
+          return `Source file not found: ${fromPath}`;
+        }
+        if (!overwrite && await fileExists(toPath)) {
+          return `Destination file already exists: ${toPath}. Set overwrite=true to overwrite.`;
+        }
+        const toDir = path.dirname(toPath);
+        if (!existsSync(toDir)) {
+          await fs.mkdir(toDir, { recursive: true });
+        }
+        await fs.rename(fromPath, toPath);
+        return `File moved from ${fromPath} to ${toPath}`;
+      } catch (error) {
+        return handleError(error, 'Failed to move file');
+      }
+    },
+  });
+
+  // COPY FILE
+  server.addTool({
+    name: 'copy_file',
+    description: 'Copy a file from one location to another within the workspace.',
+    parameters: z.object({
+      from: z.string().describe('Relative path to the source file'),
+      to: z.string().describe('Relative path to the destination'),
+      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      overwrite: z.boolean().optional().describe('Whether to overwrite if destination exists (default: false)'),
+    }),
+    execute: async (args) => {
+      try {
+        const { from, to, workspace_root = '.', overwrite = false } = args;
+        const fromPath = resolveWorkspacePath(workspace_root, from);
+        const toPath = resolveWorkspacePath(workspace_root, to);
+        if (!await fileExists(fromPath)) {
+          return `Source file not found: ${fromPath}`;
+        }
+        if (!overwrite && await fileExists(toPath)) {
+          return `Destination file already exists: ${toPath}. Set overwrite=true to overwrite.`;
+        }
+        const toDir = path.dirname(toPath);
+        if (!existsSync(toDir)) {
+          await fs.mkdir(toDir, { recursive: true });
+        }
+        await fs.copyFile(fromPath, toPath);
+        return `File copied from ${fromPath} to ${toPath}`;
+      } catch (error) {
+        return handleError(error, 'Failed to copy file');
+      }
+    },
+  });
 
   return server;
 }
