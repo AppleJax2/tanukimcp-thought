@@ -5,25 +5,22 @@ name: "tanukimcp-thought"
 description: "Sequential Prompting Framework: Transform thoughts into structured, executable tasks using the IDE's LLM capabilities"
 version: 1
 
-# Hosting configuration
-type: "stdio"
-start: ["node", "entry.js"]
+# Hosting configuration - HTTP mode for better performance
+type: "http"
+start: ["node", "dist/http-server.js"]
+port: 3000
 
 # Define environment variables for the deployment
 env:
-  ENABLE_QUICK_STARTUP: "true"
+  NODE_ENV: "production"
   SMITHERY_HOSTED: "true"
-  OPTIMIZE_FOR_TOOL_SCAN: "true"
   USE_IDE_LLM: "true"
+  HTTP_MODE: "true"
 
 # Tool configuration
 tools:
   # For instant tool scanning
   manifest: "./tools-manifest.json"
-  # Environment variables for tool scanning
-  scan:
-    env:
-      SMITHERY_TOOL_SCAN: "true"
 
 # Server options
 options:

@@ -25,14 +25,19 @@ COPY tools-manifest.json ./
 COPY smithery.yaml ./
 COPY tanuki-config.json ./
 
-# Set environment variables
+# Set environment variables for HTTP mode
 ENV NODE_ENV=production
-ENV ENABLE_QUICK_STARTUP=true
 ENV SMITHERY_HOSTED=true
 ENV USE_IDE_LLM=true
+ENV HTTP_MODE=true
+ENV PORT=3000
 
-# Create a healthcheck that returns immediately
-HEALTHCHECK --interval=5s --timeout=1s --retries=3 CMD [ "echo", "healthy" ]
+# Expose HTTP port
+EXPOSE 3000
 
-# Run the server in stdio mode with IDE LLM flag (always required)
-CMD ["node", "dist/index.js", "--ide-llm"] 
+# Create HTTP healthcheck
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Run the HTTP server
+CMD ["node", "dist/http-server.js"] 

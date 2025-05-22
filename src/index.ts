@@ -1,19 +1,4 @@
-// Tool scan fast path: must be the very first code in the file!
-if (process.env.SMITHERY_HOSTED === 'true' && process.env.SMITHERY_TOOL_SCAN === 'true') {
-  // Use dynamic import for fs and path
-  (async () => {
-    const fs = await import('fs');
-    const path = await import('path');
-    try {
-      const toolsManifest = fs.readFileSync(path.join(process.cwd(), 'tools-manifest.json'), 'utf-8');
-      process.stdout.write(toolsManifest);
-      process.exit(0);
-    } catch (error) {
-      process.stderr.write('Error reading tool manifest: ' + error + '\n');
-      process.exit(1);
-    }
-  })();
-}
+// Tool scan fast path: must be the very first code in the file!if (process.env.SMITHERY_HOSTED === 'true' && process.env.SMITHERY_TOOL_SCAN === 'true') {  // Use dynamic import for fs and path  (async () => {    const fs = await import('fs');    const path = await import('path');    try {      const toolsManifest = fs.readFileSync(path.join(process.cwd(), 'tools-manifest.json'), 'utf-8');      process.stdout.write(toolsManifest);      process.exit(0);    } catch (error) {      process.stderr.write('Error reading tool manifest: ' + error + '\n');      process.exit(1);    }  })();}// HTTP mode check - redirect to HTTP server if in HTTP modeif (process.env.HTTP_MODE === 'true') {  console.log('🌐 Starting in HTTP mode...');  import('./http-server.js');  // Exit here to prevent stdio server from starting  export {};}
 
 import { createTanukiServer } from './server.js';
 import path from 'path';
