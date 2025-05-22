@@ -3,6 +3,8 @@ start:
   command: ["node", "dist/http.js"]
   port: 3000
 tools:
-  manifest: "./tools-manifest.json"
-  endpoint: "/tools-list"
-  port: 3001 
+  manifest: "./tools-response.json"
+  endpoint: "/"
+  port: 3001
+options:
+  lazy_loading: true 

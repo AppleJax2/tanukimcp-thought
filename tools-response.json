@@ -1,0 +1,66 @@
+{
+  "id": "tools-list",
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "name": "brain_dump_organize",
+      "description": "Transform unstructured thoughts into a structured markdown todolist. Will not overwrite existing files unless overwrite=true."
+    },
+    {
+      "name": "enhance_todolist",
+      "description": "Enhance an existing todolist with more detailed specifications, acceptance criteria, and technical requirements. Will not overwrite existing files unless overwrite=true."
+    },
+    {
+      "name": "find_next_task",
+      "description": "Identify the next logical unchecked task to implement from the todolist."
+    },
+    {
+      "name": "plan_task_implementation",
+      "description": "Create a detailed implementation plan for a specific task."
+    },
+    {
+      "name": "task_executor",
+      "description": "Execute a planned task by implementing the necessary file operations based on the implementation plan. Use validate_plan=true to preview actions without executing them."
+    },
+    {
+      "name": "mark_task_complete",
+      "description": "Mark a specific task as complete in the todolist."
+    },
+    {
+      "name": "create_file",
+      "description": "Create a new file with the specified content in the workspace."
+    },
+    {
+      "name": "edit_file",
+      "description": "Edit an existing file by applying changes (replace, append, prepend, insert_at_line)."
+    },
+    {
+      "name": "delete_file",
+      "description": "Delete a file from the workspace."
+    },
+    {
+      "name": "move_file",
+      "description": "Move a file from one location to another within the workspace."
+    },
+    {
+      "name": "copy_file",
+      "description": "Copy a file from one location to another within the workspace."
+    },
+    {
+      "name": "create_directory",
+      "description": "Create a new directory in the workspace."
+    },
+    {
+      "name": "list_directory",
+      "description": "List the contents of a directory in the workspace."
+    },
+    {
+      "name": "delete_directory",
+      "description": "Delete a directory from the workspace."
+    },
+    {
+      "name": "batch_operations",
+      "description": "Execute multiple file/directory operations in a single batch."
+    }
+  ]
+} 

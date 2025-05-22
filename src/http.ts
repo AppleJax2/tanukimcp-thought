@@ -3,6 +3,7 @@ import http from 'http';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync, readFileSync } from 'fs';
 
 /**
  * HTTP entry point for the tanukimcp-thought MCP server
@@ -10,46 +11,83 @@ import { fileURLToPath } from 'url';
  */
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 const host = process.env.HOST || '0.0.0.0';
+const toolsPort = process.env.TOOLS_PORT ? parseInt(process.env.TOOLS_PORT) : port + 1;
 
 console.log(`🚀 Starting Tanuki Sequential Thought MCP Server (HTTP mode)...`);
 
 // SMITHERY_COMPATIBILITY: Ensure faster server startup for tool scanning
 process.env.ENABLE_QUICK_STARTUP = 'true';
 
-// Create the main server
-const server = createTanukiServer();
-
-// Create a simple HTTP server specifically for the tools list endpoint
+// Get directory name for file paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const toolsManifestPath = path.join(__dirname, '..', 'tools-manifest.json');
 
-const httpServer = http.createServer(async (req, res) => {
-  if (req.url === '/tools-list') {
-    res.setHeader('Content-Type', 'application/json');
-    try {
-      // Read the tools manifest file
-      const toolsManifest = await fs.readFile(toolsManifestPath, 'utf8');
-      res.statusCode = 200;
-      res.end(toolsManifest);
-    } catch (error) {
-      console.error('Error reading tools manifest:', error);
-      res.statusCode = 500;
-      res.end(JSON.stringify({ error: 'Failed to read tools manifest' }));
-    }
+// Path to the static tools response file
+const toolsResponsePath = path.join(__dirname, '..', 'tools-response.json');
+
+// Preload the tools response file to avoid any file I/O during request handling
+let cachedToolsResponse = '';
+try {
+  if (existsSync(toolsResponsePath)) {
+    cachedToolsResponse = readFileSync(toolsResponsePath, 'utf8');
+    console.log('✅ Preloaded tools response file');
   } else {
-    res.statusCode = 404;
-    res.end(JSON.stringify({ error: 'Not found' }));
+    console.warn('⚠️ Tools response file not found, will try to read dynamically');
+  }
+} catch (error) {
+  console.error('Error preloading tools response file:', error);
+}
+
+// Create a dedicated HTTP server for tools list
+const toolsServer = http.createServer(async (req, res) => {
+  // Set CORS headers to allow Smithery to access from any origin
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
+  // Serve the tools list for any path - make it as responsive as possible
+  res.setHeader('Content-Type', 'application/json');
+  
+  // Use the cached response if available to avoid any I/O
+  if (cachedToolsResponse) {
+    res.statusCode = 200;
+    res.end(cachedToolsResponse);
+    return;
+  }
+
+  // Fallback to reading the file if not cached
+  try {
+    const toolsResponse = await fs.readFile(toolsResponsePath, 'utf8');
+    res.statusCode = 200;
+    res.end(toolsResponse);
+  } catch (error) {
+    console.error('Error reading tools response file:', error);
+    res.statusCode = 500;
+    res.end(JSON.stringify({ 
+      jsonrpc: "2.0", 
+      error: { 
+        code: -32603, 
+        message: "Internal error reading tools list" 
+      },
+      id: "tools-list"
+    }));
   }
 });
 
-// Listen on a different port
-const toolsListPort = port + 1;
-httpServer.listen(toolsListPort, host, () => {
-  console.log(`📋 Tools list server running at http://${host === '0.0.0.0' ? 'localhost' : host}:${toolsListPort}/tools-list`);
+// Start the tools server
+toolsServer.listen(toolsPort, host, () => {
+  console.log(`📋 Tools list server running at http://${host === '0.0.0.0' ? 'localhost' : host}:${toolsPort}`);
 });
 
-// Start the main MCP server
+// Create and start the main server
+const server = createTanukiServer();
 server.start({
   transportType: 'sse',
   sse: {
