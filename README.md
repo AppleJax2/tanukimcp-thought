@@ -63,6 +63,12 @@ Start the server:
 npx @applejax2/tanukimcp-thought
 ```
 
+For IDE LLM mode (leverages your IDE's built-in LLM capabilities):
+
+```bash
+npx @applejax2/tanukimcp-thought --ide-llm
+```
+
 ### Basic Usage Flow
 
 1. Start with mcp_tanukimcp-thought_brain_dump_organize to create a structured todolist
@@ -159,317 +165,101 @@ There are two ways to use this MCP:
 
 ### Option 1: Hosted Installation (via Cursor/Smithery)
 
-This option is simple to set up but **does not use local LLMs** - it will fall back to rule-based processing.
+The easiest way to get started:
 
 1. Go to [smithery.ai/server/@AppleJax2/tanukimcp-thought](https://smithery.ai/server/@AppleJax2/tanukimcp-thought) and use the auto-install command, or manually add this to your `.cursor/mcp.json` file:
 
    ```json
    "tanukimcp-thought": {
      "command": "npx",
-     "args": ["@applejax2/tanukimcp-thought@latest"]
+     "args": ["@applejax2/tanukimcp-thought@latest", "--ide-llm"]
    }
    ```
 
-2. That's it! Your AI agent now has access to the Sequential Prompting Framework tools, though without LLM-powered reasoning.
+2. That's it! Your AI agent now has access to the Sequential Prompting Framework tools, leveraging your IDE's built-in LLM capabilities.
 
-### Option 2: Local Installation (with LLM-powered reasoning)
+### Option 2: Local Installation
 
-For full functionality with LLM-powered reasoning, follow these comprehensive steps to run the MCP locally:
+For full functionality:
 
-#### Step 1: Install Ollama
-
-Ollama is the local LLM engine that powers the intelligent reasoning capabilities of this MCP server. Follow these platform-specific installation instructions:
-
-**Windows:**
-1. Download the installer from [ollama.ai](https://ollama.ai/).
-2. Run the installer and follow the on-screen instructions.
-3. After installation, Ollama will start automatically and be accessible at `http://localhost:11434`.
-4. Verify installation by opening a command prompt and running: `curl http://localhost:11434/api/version`
-
-**Mac:**
-1. Download and install Ollama from [ollama.ai](https://ollama.ai/).
-2. After installation, launch Ollama from your Applications folder.
-3. Verify installation by opening Terminal and running: `curl http://localhost:11434/api/version`
-
-**Linux:**
-1. Open a terminal and run: `curl -fsSL https://ollama.ai/install.sh | sh`
-2. After installation, start Ollama by running: `ollama serve`
-3. Verify installation with: `curl http://localhost:11434/api/version`
-
-#### Step 2: Install a Compatible Language Model
-
-This MCP works with several Ollama models, but [DeepSeek-R1](https://ollama.com/library/deepseek-r1) is recommended for best performance:
-
-1. Open a terminal or command prompt.
-2. Run the following command to download the model:
+1. **Install the package**
    ```bash
-   ollama pull deepseek-r1
+   npm install -g @applejax2/tanukimcp-thought
    ```
-3. Wait for the model to download completely (this may take several minutes depending on your internet speed).
-4. Verify the model was installed by running: `ollama list`
 
-Alternative models that work with this MCP include:
-- deepseek-r1 (default, best performance)
-- llama3.1
-- qwen3
-- mistral-small3.1
-- phi4-reasoning
-- cogito
-
-#### Step 3: Ensure Ollama is Running
-
-Before proceeding, ensure Ollama is running and accessible:
-
-**Windows/Mac:**
-1. Ensure the Ollama application is running (check for its icon in your system tray or menu bar).
-2. If not running, start it from your applications menu.
-
-**Linux:**
-1. Run `ollama serve` in a terminal window.
-2. Keep this terminal open while using the MCP.
-
-In all cases, verify Ollama is responding by running:
-```bash
-curl http://localhost:11434/api/version
-```
-This should return a JSON object with the version information.
-
-#### Step 4: Set Up the MCP Server (Complete Method)
-
-For the most reliable setup, follow these steps to clone and build the MCP server:
-
-1. **Clone the repository**
+2. **Run with IDE LLM mode**
    ```bash
-   # Clone the repository
-   git clone https://github.com/applejax2/tanukimcp-thought.git
-   cd tanukimcp-thought
+   npx @applejax2/tanukimcp-thought --ide-llm
    ```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+3. **Create Configuration File (Optional)**
 
-3. **Build the project**
-   ```bash
-   npm run build
-   ```
+   Create a `tanuki-config.json` file in your project directory to customize the behavior:
 
-4. **Start the server in HTTP mode** (this is crucial for Cursor integration)
-   ```bash
-   npm run start:http
-   ```
-
-   **IMPORTANT:** Note the port number and SSE endpoint in the console output. You should see a message like:
-   ```
-   🚀 Starting Tanuki Sequential Thought MCP Server (HTTP mode)...
-   📋 Tanuki Sequential Thought MCP Server is running at http://localhost:3001/sse
-   ```
-   
-   Take note of both the port number (e.g., 3001) and the fact that the endpoint includes `/sse`.
-   
-   **Critical:** Keep this terminal window open as long as you want the MCP server to run. Closing it will terminate the server.
-
-Alternatively, you can use the Quick Method with npx, though the Complete Method is recommended for more reliable operation:
-```bash
-npx @applejax2/tanukimcp-thought@latest start:http
-```
-
-#### Step 5: Create Configuration File
-
-Create a `tanuki-config.json` file in your project directory to customize the LLM and its parameters:
-
-1. Create a new file named `tanuki-config.json` in the root of your project directory.
-2. Add the following content to the file:
    ```json
    {
-     "llmModel": "deepseek-r1",
-     "ollamaParams": {
-       "num_ctx": 16384,
-       "temperature": 0.7,
-       "top_p": 0.9,
-       "num_thread": 8
-     },
+     "useIdeLlm": true,
      "autoCreateConfig": true,
      "projectRoot": "/path/to/your/project"
    }
    ```
-3. Customize any parameters as needed:
-   - `llmModel`: The Ollama model you installed (e.g., "deepseek-r1", "llama3.1")
-   - `num_ctx`: Maximum context window size (larger values allow more context but use more memory)
-   - `temperature`: Controls randomness (0.0-1.0, lower values = more deterministic output)
-   - `top_p`: Controls diversity (0.0-1.0, higher values = more diverse output)
-   - `num_thread`: Number of CPU threads to use (adjust based on your hardware)
-
-The `projectRoot` option (default: current working directory) specifies the base directory for all file operations. This is useful when you're running the MCP server from a different directory than your project.
 
 ### Connecting Cursor to Your Local MCP Server
 
-To use LLM-powered capabilities directly within Cursor, follow these detailed steps to connect Cursor to your locally running MCP server:
+To use the tools directly within Cursor:
 
-#### Step 1: Locate Your MCP Server Information
-
-Before configuring Cursor, make sure you have:
-1. Your MCP server running in HTTP mode using `npm run start:http`
-2. The port number from the console output (typically 3001)
-3. Noted that the endpoint includes `/sse` (this is critical)
-
-You should see a message like:
-```
-🚀 Starting Tanuki Sequential Thought MCP Server (HTTP mode)...
-📋 Tanuki Sequential Thought MCP Server is running at http://localhost:3001/sse
-```
-
-#### Step 2: Locate and Edit Your Cursor MCP Configuration
-
-1. **Find your `.cursor/mcp.json` file**:
-   - **Windows**: Usually located at `C:\Users\<YourUsername>\.cursor\mcp.json`
-   - **Mac/Linux**: Usually located at `~/.cursor/mcp.json`
-   
-   If the file doesn't exist, create it with an empty JSON object: `{}`
-
-2. **Edit the file** to add your local MCP server configuration:
-   ```json
-   {
-     "mcpServers": {
-       "tanukimcp-thought": {
-         "url": "http://localhost:3001/sse"
-       }
-     }
-   }
-   ```
-
-   **IMPORTANT**: Make sure to include the full URL with the port number AND the `/sse` endpoint. The `/sse` part is crucial for proper communication.
-
-   If your `mcp.json` already has other entries, just add the `tanukimcp-thought` entry to the existing `mcpServers` object:
-   ```json
-   {
-     "mcpServers": {
-       "existing-mcp": { /* existing config */ },
-       "tanukimcp-thought": {
-         "url": "http://localhost:3001/sse"
-       }
-     }
-   }
-   ```
-
-3. **Save the file** after making these changes.
-
-#### Step 3: Restart Cursor
-
-After updating the configuration:
-1. **Close Cursor completely** (not just the window, but exit the application)
-2. **Wait a few seconds** to ensure all processes terminate
-3. **Start Cursor again**
-
-#### Step 4: Verify the Connection
-
-To ensure your local MCP server with LLM capabilities is connected:
-
-1. **Open a project in Cursor**
-2. **Try using one of the tools** by typing a comment like:
-   ```
-   // Use mcp_tanukimcp-thought_brain_dump_organize
-   ```
-   
-3. **Check the server logs** in your terminal where the MCP is running. You should see activity when the tool is invoked.
-
-4. **Verify LLM processing** by observing the quality and detail of the output. LLM-powered responses will be more sophisticated than rule-based processing.
-
-#### Troubleshooting Connection Issues
-
-If you encounter issues connecting Cursor to your local MCP server, try these troubleshooting steps:
-
-1. **Verify Ollama is running**:
-   ```bash
-   curl http://localhost:11434/api/version
-   ```
-   Should return a JSON response with version information.
-
-2. **Verify MCP server is running in HTTP mode**:
-   - Ensure you used `npm run start:http` and not just `npm start`
-   - Look for the message confirming HTTP mode and the `/sse` endpoint
-
-3. **Test the MCP server endpoint**:
-   ```bash
-   curl http://localhost:3001/sse
-   ```
-   This might not return immediate data, but should not error out.
-
-4. **Check your mcp.json configuration**:
-   - Ensure the URL includes the port number AND `/sse`
-   - Verify JSON syntax is correct (no missing commas, brackets, etc.)
-
-5. **Reload MCPs in Cursor**:
-   - Open Command Palette (Ctrl+Shift+P)
-   - Type and select "Reload MCPs"
-   - Wait a few seconds for reload to complete
-
-6. **Alternative Connection Method**:
-   If direct URL connection fails, try using Smithery as a bridge:
-   1. Install Smithery CLI: `npm install -g smithery`
-   2. In a new terminal, run: `npx smithery link http://localhost:3001/sse tanukimcp-thought`
-   3. Update your `.cursor/mcp.json`:
-      ```json
-      "tanukimcp-thought": {
-        "command": "cmd",
-        "args": [
-          "/c", 
-          "npx", 
-          "-y", 
-          "smithery", 
-          "run", 
-          "tanukimcp-thought"
-        ]
-      }
-      ```
-   4. Restart Cursor completely
-
-7. **Full Reset**:
-   If all else fails:
-   1. Stop your MCP server
-   2. Close Cursor
-   3. Restart Ollama
-   4. Start your MCP server with `npm run start:http`
-   5. Start Cursor
-   6. Try using the tools again
-
-### Using API Directly (Alternative)
-
-If you prefer to interact with the MCP server's API directly without going through Cursor, you can make HTTP requests to its endpoints:
+#### Step 1: Run Your MCP Server in HTTP Mode
 
 ```bash
-# Example of calling the brain_dump_organize tool via curl
-curl -X POST http://localhost:3001/api/tools/brain_dump_organize \
-  -H "Content-Type: application/json" \
-  -d '{"project_description":"My project","unstructured_thoughts":"thought 1, thought 2"}'
+npx @applejax2/tanukimcp-thought --ide-llm start:http
 ```
 
-Replace the port number and endpoint with those displayed in your server's console output.
+Note the port number and SSE endpoint (typically http://localhost:3001/sse).
 
-### Choosing the Right Installation
+#### Step 2: Configure Cursor
 
-Your choice of installation method depends on your specific needs:
+1. **Edit your `.cursor/mcp.json` file**:
+   ```json
+   {
+     "mcpServers": {
+       "tanukimcp-thought": {
+         "url": "http://localhost:3001/sse"
+       }
+     }
+   }
+   ```
 
-- **Use hosted installation (Option 1)** if:
-  - You want the simplest setup with minimal configuration
-  - You don't need the enhanced reasoning capabilities of local LLMs
-  - You're comfortable with rule-based processing rather than AI-powered analysis
-  - You have limited system resources or don't want to run Ollama locally
+2. **Restart Cursor** completely.
 
-- **Use local installation with LLM integration (Option 2)** if:
-  - You need high-quality, AI-powered analysis and task planning
-  - You want more sophisticated organization of thoughts and detailed implementation plans
-  - You value privacy and want all processing to happen locally
-  - You have sufficient system resources to run Ollama and the models
-  - You're comfortable with a slightly more complex setup process
+## 🧠 IDE LLM Mode
 
-- **Connect Cursor to your local MCP** if:
-  - You want the best of both worlds: using Cursor's interface with the power of local LLMs
-  - You'll be using the tools frequently and want them integrated into your workflow
-  - You want to take advantage of Cursor's AI capabilities alongside the Sequential Prompting Framework
+This package now defaults to "IDE LLM mode," which leverages the built-in LLM capabilities of your AI-powered IDE (like Cursor with Claude, GitHub Copilot, etc.) instead of requiring a separate local LLM.
 
-The most powerful configuration is Option 2 with Cursor integration, as it provides LLM-powered reasoning directly within your development environment.
+### Benefits of IDE LLM Mode:
+
+1. **No External Dependencies**: No need to install and run a separate LLM
+2. **Simpler Setup**: Works out-of-the-box with just the npm package
+3. **Better Performance**: Uses the optimized LLM connection from your IDE
+4. **Lower Resource Usage**: No additional memory or CPU overhead
+
+To use IDE LLM mode (enabled by default):
+```bash
+npx @applejax2/tanukimcp-thought --ide-llm
+```
+
+Or set it in your configuration file:
+```json
+{
+  "useIdeLlm": true
+}
+```
+
+### How It Works
+
+In IDE LLM mode, the package:
+1. Uses rule-based processing for basic task organization
+2. Leverages your IDE's built-in LLM for complex reasoning
+3. Provides the same structured workflow without external LLM dependencies
 
 ## 🛠️ Tools Reference
 
@@ -743,13 +533,7 @@ You can customize the model and its parameters by creating a `tanuki-config.json
 
 ```json
 {
-  "llmModel": "deepseek-r1",
-  "ollamaParams": {
-    "num_ctx": 16384,
-    "temperature": 0.7,
-    "top_p": 0.9,
-    "num_thread": 8
-  },
+  "useIdeLlm": true,
   "autoCreateConfig": true,
   "projectRoot": "/path/to/your/project"
 }
