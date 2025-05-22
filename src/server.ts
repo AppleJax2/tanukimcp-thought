@@ -83,23 +83,23 @@ class ProjectContextManager {
    * Intelligently resolve a path based on project context
    */
   public resolvePath(workspaceRoot: string, targetPath: string, projectHint?: string): string {
-    // MODIFIED: Always use the provided workspace root, even if it's in a tool directory
-    // This ensures we respect the user's current directory in Cursor or other environments
-
     // Standard path resolution
     console.log('*** ProjectContextManager: Using standard path resolution ***');
-    const projectRoot = userConfig.projectRoot || process.env.PROJECT_ROOT || process.cwd();
-    const effectiveRoot = path.isAbsolute(workspaceRoot) ? 
-      workspaceRoot : 
-      path.resolve(projectRoot, workspaceRoot);
     
-    const resolved = path.resolve(effectiveRoot, targetPath);
-    console.log(`*** Resolved path: ${resolved} ***`);
-    
-    // Security check to ensure the path is within the effective root
-    if (!resolved.startsWith(effectiveRoot)) {
-      throw new Error(`Path ${targetPath} is outside the workspace root (${effectiveRoot})`);
+    // If it's an absolute path, use it directly
+    if (path.isAbsolute(targetPath)) {
+      console.log(`*** Path is already absolute: ${targetPath} ***`);
+      return targetPath;
     }
+    
+    // If workspace root is not absolute, this is an error
+    if (!path.isAbsolute(workspaceRoot)) {
+      throw new Error(`workspace_root must be an absolute path, got: ${workspaceRoot}`);
+    }
+    
+    // Resolve the path relative to the workspace root
+    const resolved = path.resolve(workspaceRoot, targetPath);
+    console.log(`*** Resolved path: ${resolved} (from workspace_root: ${workspaceRoot}) ***`);
     
     return resolved;
   }
@@ -322,6 +322,21 @@ export function createTanukiServer() {
     }
   }
 
+  // Helper to extract client working directory from request headers
+  function getClientWorkingDir(req: any): string | undefined {
+    try {
+      if (req && req.headers && req.headers['x-client-working-dir']) {
+        const dirPath = req.headers['x-client-working-dir'] as string;
+        console.log(`Received client working directory: ${dirPath}`);
+        return dirPath;
+      }
+      return undefined;
+    } catch (error) {
+      console.error('Error extracting client working directory:', error);
+      return undefined;
+    }
+  }
+
   // Phase 1: Brain Dump & Initial Organization
   server.addTool({
     name: 'brain_dump_organize',
@@ -331,11 +346,11 @@ export function createTanukiServer() {
       unstructured_thoughts: z.string().describe('Unstructured thoughts, ideas, and considerations about the project'),
       output_file: z.string().optional().describe('Optional file path to save the todolist (default: <project>_todo.md)'),
       overwrite: z.boolean().optional().describe('Whether to overwrite if file exists (default: false)'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
     }),
-    execute: async (args) => {
+    execute: async (args, req) => {
       try {
-        const { project_description, unstructured_thoughts, overwrite = false, workspace_root = '.' } = args;
+        const { project_description, unstructured_thoughts, overwrite = false, workspace_root } = args;
         
         // Generate a file name based on the project description if not provided
         // Sanitize the project name to create a valid filename
@@ -356,7 +371,7 @@ export function createTanukiServer() {
           return 'Error: Unstructured thoughts cannot be empty.';
         }
         
-        // Resolve the output file path relative to the workspace root with project context
+        // Pass client working directory to resolveWorkspacePath
         const resolvedOutputPath = resolveWorkspacePath(workspace_root, output_file, project_description);
         
         // Check for file existence
@@ -382,7 +397,8 @@ export function createTanukiServer() {
             console.warn('Could not write todolist to file in hosted environment:', fileError);
           }
           
-          return `Note: In hosted environments, this tool uses rule-based processing instead of LLM. For full functionality, use locally with Ollama installed.\n\n${todolist}`;
+          // Add guidance for LLMs on workspace_root
+          return `Note: In hosted environments, this tool uses rule-based processing instead of LLM. For full functionality, use locally with Ollama installed.\n\n${todolist}${getLLMWorkspaceGuidance()}`;
         }
         
         // Check Ollama requirements only when the tool is called
@@ -422,7 +438,10 @@ export function createTanukiServer() {
           path.dirname(resolvedOutputPath)
         );
         
-        return `Successfully created todolist and saved to "${resolvedOutputPath}".\n\n${todolist}`;
+        // Add guidance for LLMs on workspace_root
+        const response = `Successfully created todolist and saved to "${resolvedOutputPath}".\n\n${todolist}${getLLMWorkspaceGuidance()}`;
+        
+        return response;
       } catch (error) {
         return handleError(error, 'Failed to create and save todolist');
       }
@@ -583,11 +602,11 @@ export function createTanukiServer() {
       input_file: z.string().describe('Path to the existing todolist file'),
       output_file: z.string().optional().describe('Optional file path to save the enhanced todolist (defaults to overwriting input file)'),
       overwrite: z.boolean().optional().describe('Whether to overwrite if file exists (default: false)'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
     }),
     execute: async (args) => {
       try {
-        const { input_file, output_file, overwrite = false, workspace_root = '.' } = args;
+        const { input_file, output_file, overwrite = false, workspace_root } = args;
         
         // Resolve the input and output file paths relative to the workspace root
         const resolvedInputPath = resolveWorkspacePath(workspace_root, input_file);
@@ -624,7 +643,7 @@ export function createTanukiServer() {
         // Write the enhanced todolist to file
         await fs.writeFile(resolvedOutputPath, enhancedTodolist, 'utf-8');
         
-        return `Successfully enhanced todolist and saved to "${resolvedOutputPath}".\n\n${enhancedTodolist}`;
+        return `Successfully enhanced todolist and saved to "${resolvedOutputPath}".\n\n${enhancedTodolist}${getLLMWorkspaceGuidance()}`;
       } catch (error) {
         return handleError(error, 'Failed to enhance todolist');
       }
@@ -786,11 +805,11 @@ export function createTanukiServer() {
     description: 'Identify the next logical unchecked task to implement from the todolist.',
     parameters: z.object({
       todolist_file: z.string().describe('Path to the todolist file'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
     }),
     execute: async (args) => {
       try {
-        const { todolist_file, workspace_root = '.' } = args;
+        const { todolist_file, workspace_root } = args;
         
         // Resolve the todolist file path relative to the workspace root
         const resolvedTodolistPath = resolveWorkspacePath(workspace_root, todolist_file);
@@ -819,7 +838,7 @@ export function createTanukiServer() {
         
         // Use LLM to find and prioritize the next task
         const nextTask = await findNextTaskWithLLM(todolist);
-        return nextTask;
+        return `Next task to implement: "${nextTask}"\n\nContext from todolist:\n${todolist}${getLLMWorkspaceGuidance()}`;
       } catch (error) {
         return handleError(error, 'Failed to find next task');
       }
@@ -873,7 +892,7 @@ export function createTanukiServer() {
         nextTask = match ? match[1] : "No specific task identified";
       }
       
-      return `Next task to implement: "${nextTask}"\n\nContext from todolist:\n${todolist}`;
+      return nextTask;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.warn(`Warning: LLM task prioritization failed: ${errorMessage}, using simple fallback`);
@@ -882,7 +901,7 @@ export function createTanukiServer() {
       const match = todolist.match(/- \[ \] (.+)$/m);
       const nextTask = match ? match[1] : "No specific task identified";
       
-      return `Next task to implement: "${nextTask}"\n\nContext from todolist:\n${todolist}`;
+      return nextTask;
     }
   }
 
@@ -891,13 +910,13 @@ export function createTanukiServer() {
     name: 'plan_task_implementation',
     description: 'Create a detailed implementation plan for a specific task.',
     parameters: z.object({
-      task: z.string().describe('The task to plan implementation for'),
-      todolist_file: z.string().describe('Path to the todolist file for context'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      task: z.string().describe('The task to implement (exact text from todolist)'),
+      todolist_file: z.string().describe('Path to the todolist file'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
     }),
     execute: async (args) => {
       try {
-        const { task, todolist_file, workspace_root = '.' } = args;
+        const { task, todolist_file, workspace_root } = args;
         
         // Validate inputs
         if (!task.trim()) {
@@ -930,7 +949,7 @@ export function createTanukiServer() {
         
         // Generate implementation plan with LLM
         const plan = await createImplementationPlanWithLLM(task, todolist);
-        return plan;
+        return plan + getLLMWorkspaceGuidance();
       } catch (error) {
         return handleError(error, 'Failed to create implementation plan');
       }
@@ -997,13 +1016,13 @@ export function createTanukiServer() {
     name: 'mark_task_complete',
     description: 'Mark a specific task as complete in the todolist.',
     parameters: z.object({
-      task: z.string().describe('The task text to mark as complete'),
+      task: z.string().describe('The task to mark as complete (exact text from todolist)'),
       todolist_file: z.string().describe('Path to the todolist file'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
     }),
     execute: async (args) => {
       try {
-        const { task, todolist_file, workspace_root = '.' } = args;
+        const { task, todolist_file, workspace_root } = args;
         
         // Validate inputs
         if (!task.trim()) {
@@ -1033,7 +1052,7 @@ export function createTanukiServer() {
         // Write the updated todolist
         await fs.writeFile(resolvedTodolistPath, updatedTodolist, 'utf-8');
         
-        return `Successfully marked task "${task}" as complete.\n\nUpdated todolist:\n${updatedTodolist}`;
+        return `Successfully marked task "${task}" as complete.\n\nUpdated todolist:\n${updatedTodolist}${getLLMWorkspaceGuidance()}`;
       } catch (error) {
         return handleError(error, 'Failed to mark task as complete');
       }
@@ -1050,11 +1069,11 @@ export function createTanukiServer() {
       implementation_plan: z.string().optional().describe('Optional implementation plan for the task. If not provided, a plan will be generated.'),
       target_directory: z.string().optional().describe('Optional target directory for file operations. Defaults to current directory.'),
       validate_plan: z.boolean().optional().describe('Whether to only validate and preview the plan without executing it (default: false)'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
     }),
     execute: async (args) => {
       try {
-        const { task, todolist_file, implementation_plan, target_directory = '.', validate_plan = false, workspace_root = '.' } = args;
+        const { task, todolist_file, implementation_plan, target_directory = '.', validate_plan = false, workspace_root } = args;
         
         // Validate inputs
         if (!task.trim()) {
@@ -1200,7 +1219,7 @@ export function createTanukiServer() {
             
             return `Task "${task}" has been successfully implemented and marked as complete.\n\n` +
                    `Implementation Summary:\n${executionResult.summary}\n\n` +
-                   `Updated todolist:\n${updatedTodolist}`;
+                   `Updated todolist:\n${updatedTodolist}${getLLMWorkspaceGuidance()}`;
           }
         }
         
@@ -1408,7 +1427,12 @@ export function createTanukiServer() {
 
   // Helper to resolve and validate paths within workspace
   function resolveWorkspacePath(workspaceRoot: string, targetPath: string, projectHint?: string): string {
-    // Use the ProjectContextManager for intelligent path resolution
+    // Require an explicit workspace root - no more special handling for "."
+    if (!workspaceRoot || workspaceRoot === '.') {
+      throw new Error('ERROR: workspace_root parameter is required and must be an absolute path. The AI assistant needs to provide the user\'s current working directory.');
+    }
+    
+    // Use the ProjectContextManager for path resolution, but always with the explicit workspace root
     return ProjectContextManager.getInstance().resolvePath(workspaceRoot, targetPath, projectHint);
   }
 
@@ -1419,12 +1443,12 @@ export function createTanukiServer() {
     parameters: z.object({
       path: z.string().describe('Relative path to the file to create'),
       content: z.string().describe('Content to write to the file'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
       overwrite: z.boolean().optional().describe('Whether to overwrite if file exists (default: false)'),
     }),
     execute: async (args) => {
       try {
-        const { path: relPath, content, workspace_root = '.', overwrite = false } = args;
+        const { path: relPath, content, workspace_root, overwrite = false } = args;
         const filePath = resolveWorkspacePath(workspace_root, relPath);
         const dir = path.dirname(filePath);
         if (!existsSync(dir)) {
@@ -1454,11 +1478,11 @@ export function createTanukiServer() {
         content: z.string().optional(),
         line: z.number().optional(),
       })).describe('Array of changes to apply'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
     }),
     execute: async (args) => {
       try {
-        const { path: relPath, changes, workspace_root = '.' } = args;
+        const { path: relPath, changes, workspace_root } = args;
         const filePath = resolveWorkspacePath(workspace_root, relPath);
         if (!await fileExists(filePath)) {
           return `Error: File not found: ${filePath}`;
@@ -1493,11 +1517,11 @@ export function createTanukiServer() {
     description: 'Delete a file from the workspace.',
     parameters: z.object({
       path: z.string().describe('Relative path to the file to delete'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
     }),
     execute: async (args) => {
       try {
-        const { path: relPath, workspace_root = '.' } = args;
+        const { path: relPath, workspace_root } = args;
         const filePath = resolveWorkspacePath(workspace_root, relPath);
         if (!await fileExists(filePath)) {
           return `File not found: ${filePath}`;
@@ -1517,12 +1541,12 @@ export function createTanukiServer() {
     parameters: z.object({
       from: z.string().describe('Relative path to the source file'),
       to: z.string().describe('Relative path to the destination'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
       overwrite: z.boolean().optional().describe('Whether to overwrite if destination exists (default: false)'),
     }),
     execute: async (args) => {
       try {
-        const { from, to, workspace_root = '.', overwrite = false } = args;
+        const { from, to, workspace_root, overwrite = false } = args;
         const fromPath = resolveWorkspacePath(workspace_root, from);
         const toPath = resolveWorkspacePath(workspace_root, to);
         if (!await fileExists(fromPath)) {
@@ -1659,13 +1683,13 @@ export function createTanukiServer() {
     description: 'Delete a directory from the workspace.',
     parameters: z.object({
       path: z.string().describe('Relative path to the directory to delete'),
-      workspace_root: z.string().optional().describe('Workspace root directory (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
       recursive: z.boolean().optional().describe('Whether to recursively delete contents (default: false)'),
       dry_run: z.boolean().optional().describe('Preview the operation without making changes (default: false)'),
     }),
     execute: async (args) => {
       try {
-        const { path: relPath, workspace_root = '.', recursive = false, dry_run = false } = args;
+        const { path: relPath, workspace_root, recursive = false, dry_run = false } = args;
         const dirPath = resolveWorkspacePath(workspace_root, relPath);
         
         if (!existsSync(dirPath)) {
@@ -1713,13 +1737,13 @@ export function createTanukiServer() {
           params: z.record(z.any()).describe('Parameters for the operation, matching the parameters of the individual tool'),
         })
       ).describe('Array of operations to perform'),
-      workspace_root: z.string().optional().describe('Default workspace root directory for all operations (default: ".")'),
+      workspace_root: z.string().describe('Workspace root directory (absolute path to the user\'s working directory)'),
       dry_run: z.boolean().optional().describe('Preview all operations without making changes (default: false)'),
       continue_on_error: z.boolean().optional().describe('Whether to continue executing operations after an error (default: false)'),
     }),
     execute: async (args) => {
       try {
-        const { operations, workspace_root = '.', dry_run = false, continue_on_error = false } = args;
+        const { operations, workspace_root, dry_run = false, continue_on_error = false } = args;
         const results = [];
         let success = true;
         
@@ -2128,4 +2152,9 @@ Testing will include:
 - Caching strategies where appropriate
 - Scalability concerns and mitigations
 `;
+}
+
+// Helper function to generate LLM guidance for workspace_root
+function getLLMWorkspaceGuidance(): string {
+  return "\n\n[Note for AI assistants: When using this tool, always set the workspace_root parameter to the user's current working directory, not the tool's directory. Check last_terminal_cwd or conversation context.]";
 } 

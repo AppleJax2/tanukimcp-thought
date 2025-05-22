@@ -1,28 +1,141 @@
-# Tanuki Sequential Thought MCP
+# 🦝 Tanuki Sequential Thought MCP
 
-Transform disorganized thoughts into structured, executable tasks with production-quality implementation plans. This MCP server implements the Sequential Prompting Framework for AI agents.
+The Tanuki Sequential Thought MCP is a modular thinking toolkit for AI assistants, implementing the Sequential Prompting Framework to break down complex tasks into manageable steps.
+
+🚨 **IMPORTANT**: When using the tools, always provide the `workspace_root` parameter with the absolute path to the user's current working directory. This is a required parameter for all tools. The LLM should check context like `last_terminal_cwd` to determine where the user is working.
+
+## 🧩 Key Components
+
+Each tool in the framework serves a distinct purpose in the sequential problem-solving process:
+
+| Tool | Purpose | Real-World Analogy |
+|------|---------|-------------------|
+| 🧠 **Brain Dump & Organize** | `brain_dump_organize` | Turn scattered thoughts into structured tasks | Architect sketching initial building plans |
+| 🔍 **Find Next Task** | `find_next_task` | Identify logical next step in todolist | Project manager selecting next milestone |
+| 📝 **Plan Implementation** | `plan_task_implementation` | Create detailed plan for a specific task | Blueprint for a specific room |
+| 🛠️ **Execute** | `task_executor` | Actually create/modify files in your workspace | Building the actual house, one section at a time |
+| ✅ **Mark Complete** | `mark_task_complete` | Update todolist when task is finished | Checking off completed work |
+
+## 🔑 Working Directory Behavior
+
+All operations require the `workspace_root` parameter, which MUST be an absolute path to the user's current working directory.
+
+LLMs/AI assistants: You MUST check the conversation context (e.g., `last_terminal_cwd`) to determine the current working directory. This should be passed as the workspace_root parameter to all tool calls.
+
+### How to get the correct workspace_root:
+
+1. **For Claude/AI assistants**: Look for the `last_terminal_cwd` in the conversation context, which contains the absolute path to the user's current working directory.
+
+2. **For other assistants**: Look for directory information in the conversation (e.g., "I'm working in C:\Projects\MyApp").
+
+3. **Fallbacks are removed**: Unlike previous versions, the tool will NOT attempt to guess the working directory. It will throw an error if workspace_root is not provided or is not an absolute path.
+
+### Example:
+
+If you see this in the conversation context:
+```
+<last_terminal_cwd>
+You have an active shell. Whenever you use the run_terminal_cmd tool, your commands will run in the following working directory: C:\Users\username\MyProject
+</last_terminal_cwd>
+```
+
+Then use:
+```
+Please use mcp_tanukimcp-thought_create_file with:
+path: "myfile.txt"
+content: "Hello world"
+workspace_root: "C:\Users\username\MyProject"
+```
+
+## 🔧 Installation
+
+Install globally:
+
+```bash
+npm install -g @applejax2/tanukimcp-thought
+```
+
+## 📋 Usage
+
+Start the server:
+
+```bash
+npx @applejax2/tanukimcp-thought
+```
+
+### Basic Usage Flow
+
+1. Start with mcp_tanukimcp-thought_brain_dump_organize to create a structured todolist
+2. Use mcp_tanukimcp-thought_find_next_task to identify what to work on
+3. Use mcp_tanukimcp-thought_plan_task_implementation to create a detailed plan
+4. Use mcp_tanukimcp-thought_task_executor to implement the task
+5. Use mcp_tanukimcp-thought_mark_task_complete when done
+
+## 🎭 Supported Actions
+
+The following standalone actions are also available:
+
+- mcp_tanukimcp-thought_create_file
+- mcp_tanukimcp-thought_edit_file
+- mcp_tanukimcp-thought_delete_file
+- mcp_tanukimcp-thought_move_file
+- mcp_tanukimcp-thought_copy_file
+- mcp_tanukimcp-thought_create_directory
+- mcp_tanukimcp-thought_list_directory
+- mcp_tanukimcp-thought_delete_directory
+- mcp_tanukimcp-thought_batch_operations
 
 ## 🚀 Quick Start
 
-1. **Install**: Choose hosted installation for simplicity or local installation with Ollama for full AI capabilities (see detailed [installation instructions](#-installation) below)
-2. **Turn thoughts into code with a single prompt sequence**:
-   ```
-   # First, organize your thoughts
-   I want to build a simple web app. Please use the mcp_tanukimcp-thought_brain_dump_organize tool with these parameters:
-   project_description: "Personal task management application"
-   unstructured_thoughts: "Need login page, task list view, add/edit/delete tasks, save to database, mobile responsive, dark mode..."
-   
-   # Then enhance with details
-   Now please use the mcp_tanukimcp-thought_enhance_todolist tool with these parameters:
-   input_file: "task_management_application_todo.md"
-   
-   # Finally, build the project file by file
-   Please execute the following sequence until all tasks are complete:
-   1. Use mcp_tanukimcp-thought_find_next_task with todolist_file: "task_management_application_todo.md"
-   2. Use mcp_tanukimcp-thought_plan_task_implementation with the identified task
-   3. Use mcp_tanukimcp-thought_task_executor with the same task
-   ```
-3. **Check your workspace** for the newly created files and project structure
+### 1. Create a structured todolist from brainstorming
+
+```
+Please use mcp_tanukimcp-thought_brain_dump_organize with:
+project_description: "Personal Finance Tracker"
+unstructured_thoughts: "
+- Need to track monthly income and expenses
+- Show summary of spending categories
+- Create graphs for visualization
+- Allow setting budget goals
+- Send notification when close to budget limit
+"
+workspace_root: "C:\Users\username\finance-app"
+```
+
+### 2. Find the next task to implement
+
+```
+Please use mcp_tanukimcp-thought_find_next_task with:
+todolist_file: "personal_finance_tracker_todo.md" 
+workspace_root: "C:\Users\username\finance-app"
+```
+
+### 3. Plan a task implementation
+
+```
+Please use mcp_tanukimcp-thought_plan_task_implementation with:
+task: "Create a dashboard component showing monthly spending summary"
+todolist_file: "personal_finance_tracker_todo.md"
+workspace_root: "C:\Users\username\finance-app"
+```
+
+### 4. Execute the task implementation
+
+```
+Please use mcp_tanukimcp-thought_task_executor with:
+task: "Create a dashboard component showing monthly spending summary"
+todolist_file: "personal_finance_tracker_todo.md"
+workspace_root: "C:\Users\username\finance-app"
+```
+
+### 5. Mark the task as complete
+
+```
+Please use mcp_tanukimcp-thought_mark_task_complete with:
+task: "Create a dashboard component showing monthly spending summary"
+todolist_file: "personal_finance_tracker_todo.md"
+workspace_root: "C:\Users\username\finance-app"
+```
 
 ## 🧠 Understanding the Sequential Prompting Framework
 
@@ -681,4 +794,53 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🎓 Based on the Sequential Prompting Framework
 
-The concepts in this MCP server implement the Sequential Prompting Framework methodology for transforming unstructured thoughts into structured, executable tasks with clear implementation plans, turning ideas into functioning code through a logical, stepwise process. 
+The concepts in this MCP server implement the Sequential Prompting Framework methodology for transforming unstructured thoughts into structured, executable tasks with clear implementation plans, turning ideas into functioning code through a logical, stepwise process.
+
+## 🔑 Working Directory Behavior
+
+By default, CRUD operations use the current working directory. However, if you're using the tools from another directory, you can control where files are created by:
+
+1. Setting the `CLIENT_WORKING_DIR` environment variable when starting the server:
+   ```bash
+   # Windows
+   set CLIENT_WORKING_DIR=C:\path\to\your\project && npx @applejax2/tanukimcp-thought
+
+   # Linux/macOS
+   CLIENT_WORKING_DIR=/path/to/your/project npx @applejax2/tanukimcp-thought
+   ```
+
+2. Explicitly passing the `workspace_root` parameter in your tool calls:
+   ```
+   Please use mcp_tanukimcp-thought_create_file with:
+   path: "myfile.txt"
+   content: "Hello world"
+   workspace_root: "C:\path\to\your\project"
+   ```
+
+This ensures that file operations occur in the directory you expect, not in the directory where the server is running.
+
+### 📝 For LLMs: Working Directory Detection
+
+If you are an LLM (like Claude) reading this documentation, follow these guidelines:
+
+1. **Always detect the user's current working directory** from conversation context, terminal metadata, or explicit user statements.
+
+2. **Automatically include the workspace_root parameter** in all CRUD tool calls, setting it to the user's current working directory:
+   ```
+   workspace_root: "[user's current working directory]"
+   ```
+
+3. **Detect directory context changes** in the conversation. If the user says they're working in a specific directory, use that directory as the workspace_root.
+
+4. **Default to the last known terminal directory** if available in your context (often provided as `last_terminal_cwd`).
+
+5. **Never assume** the user is working in the same directory as the tool itself.
+
+Example of correct tool call with automatic directory detection:
+```
+// If last_terminal_cwd shows user is in C:\Users\username\project
+Please use mcp_tanukimcp-thought_create_file with:
+path: "config.json"
+content: "{}"
+workspace_root: "C:\\Users\\username\\project"
+``` 
