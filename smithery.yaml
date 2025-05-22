@@ -1,11 +1,35 @@
+# Smithery configuration
+# This file defines how your MCP server is deployed on Smithery
+
+name: "tanukimcp-thought"
+description: "Sequential Prompting Framework: Transform thoughts into structured, executable tasks using the IDE's LLM capabilities"
 version: 1
-start:
-  command: ["node", "dist/index.js", "--ide-llm"]
+
+# Hosting configuration
+type: "stdio"
+start: ["node", "dist/index.js"]
+
+# Define environment variables for the deployment
+env:
+  ENABLE_QUICK_STARTUP: "true"
+  SMITHERY_HOSTED: "true"
+  OPTIMIZE_FOR_TOOL_SCAN: "true"
+  USE_IDE_LLM: "true"
+
+# Tool configuration
 tools:
-  manifest: "./tools-response.json"
+  # For instant tool scanning
+  manifest: "./tools-manifest.json"
+  # Environment variables for tool scanning
+  scan:
+    env:
+      SMITHERY_TOOL_SCAN: "true"
+
+# Server options
 options:
   lazy_loading: true
   use_ide_llm: true
+
+# Hosting metadata
 hosted:
-  type: "stdio"
   description: "Transform unstructured thoughts into structured, executable tasks using sequential thinking. Relies exclusively on the IDE's built-in LLM capabilities." 

@@ -12,7 +12,8 @@
     "start": "node dist/index.js --ide-llm",
     "dev": "node --loader ts-node/esm src/index.ts",
     "prepublishOnly": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:tool-scan": "node scripts/test-tool-scan.js"
   },
   "keywords": [
     "mcp",
@@ -49,6 +50,7 @@
     "dist/",
     "bin/",
     "tools-response.json",
+    "tools-manifest.json",
     "smithery.yaml",
     "README.md",
     "LICENSE"
