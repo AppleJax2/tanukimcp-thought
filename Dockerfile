@@ -6,12 +6,22 @@ WORKDIR /app
 # Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies - using production flag for smaller image
-RUN npm install --production
+# Install all dependencies for build process
+RUN npm install
 
-# Copy only necessary files
-COPY dist/ ./dist/
+# Copy source files
+COPY tsconfig.json ./
+COPY src/ ./src/
+
+# Build the TypeScript project
+RUN npm run build
+
+# Remove dev dependencies after build
+RUN npm prune --production
+
+# Copy configuration files
 COPY tools-response.json ./
+COPY tools-manifest.json ./
 COPY smithery.yaml ./
 COPY tanuki-config.json ./
 
