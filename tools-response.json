@@ -1,7 +1,5 @@
 {
-  "id": "tools-list",
-  "jsonrpc": "2.0",
-  "result": [
+  "tools": [
     {
       "name": "brain_dump_organize",
       "description": "Transform unstructured thoughts into a structured markdown todolist. Will not overwrite existing files unless overwrite=true."

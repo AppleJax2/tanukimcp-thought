@@ -16,16 +16,10 @@ COPY smithery.yaml ./
 
 # Set environment variables
 ENV NODE_ENV=production
-ENV PORT=3000
-ENV TOOLS_PORT=3001
 ENV ENABLE_QUICK_STARTUP=true
-
-# Expose both the main port and tools endpoint port
-EXPOSE 3000
-EXPOSE 3001
 
 # Create a healthcheck that returns immediately
 HEALTHCHECK --interval=5s --timeout=1s --retries=3 CMD [ "echo", "healthy" ]
 
-# Run the server in HTTP mode
-CMD ["node", "dist/http.js"] 
+# Run the server in stdio mode with IDE LLM flag
+CMD ["node", "dist/index.js", "--ide-llm"] 

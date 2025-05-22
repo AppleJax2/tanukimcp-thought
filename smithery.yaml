@@ -1,10 +1,7 @@
 version: 1
 start:
-  command: ["node", "dist/http.js"]
-  port: 3000
+  command: ["node", "dist/index.js", "--ide-llm"]
 tools:
   manifest: "./tools-response.json"
-  endpoint: "/"
-  port: 3001
 options:
   lazy_loading: true 
