@@ -7,7 +7,7 @@ version: 1
 
 # Hosting configuration
 type: "stdio"
-start: ["node", "dist/index.js"]
+start: ["node", "entry.js"]
 
 # Define environment variables for the deployment
 env:
