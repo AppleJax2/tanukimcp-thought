@@ -15,11 +15,12 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Set production environment for running
+# Set environment variables
 ENV NODE_ENV=production
+ENV PORT=3000
 
 # Expose port for server
 EXPOSE 3000
 
-# Command to run the app
-CMD ["node", "dist/index.js"] 
+# Run the server in HTTP mode
+CMD ["node", "dist/http.js"] 
