@@ -378,19 +378,11 @@ mcp_tanukimcp-thought_sequential_thinking
 
 **Purpose**: Execute the plan by creating/editing/deleting actual files in your workspace
 
-<<<<<<< HEAD
-- **find_next_task** - Identifies the most logical next task to implement based on dependencies
-- **plan_task_implementation** - Creates a detailed implementation plan for a specific task
-- **task_executor** - Actually implements the task by performing the necessary file operations
-- **mark_task_complete** - Updates the todolist to mark a task as complete
-- **sequential_thinking** - Applies sequential thinking to break down a complex problem
-=======
 **Parameters**:
 - `task`: The task to implement
 - `todolist_file`: Path to the todolist file
 - `implementation_plan`: (Optional) Plan to follow (if not provided, one will be generated)
 - `target_directory`: (Optional) Directory for file operations (default: current directory)
->>>>>>> a0fe1106caf1d343e73577292a9ee65540650723
 
 **Returns**: Execution results, summary of changes, and updated todolist
 
@@ -636,4 +628,98 @@ Please use mcp_tanukimcp-thought_create_file with:
 path: "config.json"
 content: "{}"
 workspace_root: "C:\\Users\\username\\project"
-``` 
+```
+
+# Tanuki Sequential Thought MCP Server
+
+A structured sequential thinking framework for transforming unstructured thoughts into organized, executable tasks.
+
+## Overview
+
+Tanuki Sequential Thought is a Model Context Protocol (MCP) server that helps you break down complex projects into manageable tasks using a structured sequential thinking approach. It leverages the IDE's built-in LLM capabilities to transform your unstructured thoughts into organized, actionable tasks.
+
+## Features
+
+- **Brain Dump Organization**: Transform unstructured thoughts into structured markdown todolists
+- **Task Enhancement**: Add detailed specifications and acceptance criteria to tasks
+- **Sequential Task Planning**: Find the next logical task and create implementation plans
+- **Task Execution**: Execute tasks based on detailed implementation plans
+- **File Operations**: Create, edit, delete, move, and copy files and directories
+
+## Tools
+
+### Core Sequential Thinking Tools
+
+- `brain_dump_organize`: Transform unstructured thoughts into a structured markdown todolist
+- `enhance_todolist`: Add detailed specifications to existing todolists
+- `find_next_task`: Identify the next logical task to implement
+- `plan_task_implementation`: Create a detailed implementation plan for a task
+- `task_executor`: Execute planned tasks by implementing necessary file operations
+- `mark_task_complete`: Mark tasks as complete in the todolist
+
+### File Operation Tools
+
+- `create_file`: Create new files with specified content
+- `edit_file`: Edit existing files with various change types
+- `delete_file`: Delete files from the workspace
+- `move_file`: Move files between locations
+- `copy_file`: Copy files between locations
+- `create_directory`: Create new directories
+- `list_directory`: List directory contents
+- `delete_directory`: Delete directories
+- `batch_operations`: Execute multiple operations in a single batch
+
+## Usage
+
+### Brain Dump Organization
+
+```
+// Convert unstructured thoughts into a structured todolist
+tool: brain_dump_organize
+args:
+  project_description: "Personal Finance App"
+  unstructured_thoughts: "Need to create a dashboard for expense tracking. Should have charts for monthly spending. Need user authentication. Mobile responsive design. Database for storing transactions."
+  workspace_root: "/path/to/workspace"
+```
+
+### Task Planning and Implementation
+
+```
+// Find the next task to implement
+tool: find_next_task
+args:
+  todolist_file: "finance_app_todo.md"
+  workspace_root: "/path/to/workspace"
+
+// Create an implementation plan for the task
+tool: plan_task_implementation
+args:
+  task: "Create user authentication system"
+  todolist_file: "finance_app_todo.md"
+  workspace_root: "/path/to/workspace"
+
+// Execute the implementation plan
+tool: task_executor
+args:
+  task: "Create user authentication system"
+  implementation_plan: "... detailed plan ..."
+  workspace_root: "/path/to/workspace"
+```
+
+## IDE LLM Integration
+
+This server relies exclusively on the IDE's built-in LLM capabilities, with no fallback to rule-based systems. It works seamlessly with:
+
+- Claude Desktop
+- Cursor
+- Windsurf
+- VS Code with Claude plugin
+- Other Smithery-compatible MCP clients
+
+## Deployment
+
+This server is designed for deployment on Smithery as a hosted stdio MCP server.
+
+## License
+
+MIT 

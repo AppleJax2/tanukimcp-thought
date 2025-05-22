@@ -28,10 +28,11 @@ COPY tanuki-config.json ./
 # Set environment variables
 ENV NODE_ENV=production
 ENV ENABLE_QUICK_STARTUP=true
-ENV NODE_DEBUG=*
+ENV SMITHERY_HOSTED=true
+ENV USE_IDE_LLM=true
 
 # Create a healthcheck that returns immediately
 HEALTHCHECK --interval=5s --timeout=1s --retries=3 CMD [ "echo", "healthy" ]
 
-# Run the server in stdio mode with IDE LLM flag
+# Run the server in stdio mode with IDE LLM flag (always required)
 CMD ["node", "dist/index.js", "--ide-llm"] 

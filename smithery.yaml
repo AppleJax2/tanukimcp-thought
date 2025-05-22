@@ -4,4 +4,8 @@ start:
 tools:
   manifest: "./tools-response.json"
 options:
-  lazy_loading: true 
+  lazy_loading: true
+  use_ide_llm: true
+hosted:
+  type: "stdio"
+  description: "Transform unstructured thoughts into structured, executable tasks using sequential thinking. Relies exclusively on the IDE's built-in LLM capabilities." 

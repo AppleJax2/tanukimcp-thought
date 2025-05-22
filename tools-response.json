@@ -2,19 +2,19 @@
   "tools": [
     {
       "name": "brain_dump_organize",
-      "description": "Transform unstructured thoughts into a structured markdown todolist. Will not overwrite existing files unless overwrite=true."
+      "description": "Transform unstructured thoughts into a structured markdown todolist using the IDE's LLM. Input your project description and thoughts to get an organized task list."
     },
     {
       "name": "enhance_todolist",
-      "description": "Enhance an existing todolist with more detailed specifications, acceptance criteria, and technical requirements. Will not overwrite existing files unless overwrite=true."
+      "description": "Enhance an existing todolist with detailed specifications, acceptance criteria, and technical requirements using the IDE's LLM."
     },
     {
       "name": "find_next_task",
-      "description": "Identify the next logical unchecked task to implement from the todolist."
+      "description": "Identify the next logical unchecked task to implement from the todolist, based on dependencies and complexity."
     },
     {
       "name": "plan_task_implementation",
-      "description": "Create a detailed implementation plan for a specific task."
+      "description": "Create a detailed implementation plan for a specific task, including architecture, dependencies, and testing strategies."
     },
     {
       "name": "task_executor",
@@ -22,43 +22,43 @@
     },
     {
       "name": "mark_task_complete",
-      "description": "Mark a specific task as complete in the todolist."
+      "description": "Mark a specific task as complete in the todolist, updating its status from unchecked to checked."
     },
     {
       "name": "create_file",
-      "description": "Create a new file with the specified content in the workspace."
+      "description": "Create a new file with the specified content in the workspace. Supports various file types and formats."
     },
     {
       "name": "edit_file",
-      "description": "Edit an existing file by applying changes (replace, append, prepend, insert_at_line)."
+      "description": "Edit an existing file by applying changes such as replacing text, appending content, prepending content, or inserting at a specific line."
     },
     {
       "name": "delete_file",
-      "description": "Delete a file from the workspace."
+      "description": "Delete a file from the workspace. Use with caution as this operation cannot be undone."
     },
     {
       "name": "move_file",
-      "description": "Move a file from one location to another within the workspace."
+      "description": "Move a file from one location to another within the workspace, optionally overwriting existing files."
     },
     {
       "name": "copy_file",
-      "description": "Copy a file from one location to another within the workspace."
+      "description": "Copy a file from one location to another within the workspace, optionally overwriting existing files."
     },
     {
       "name": "create_directory",
-      "description": "Create a new directory in the workspace."
+      "description": "Create a new directory in the workspace, optionally creating parent directories if they don't exist."
     },
     {
       "name": "list_directory",
-      "description": "List the contents of a directory in the workspace."
+      "description": "List the contents of a directory in the workspace, showing files and subdirectories with size information."
     },
     {
       "name": "delete_directory",
-      "description": "Delete a directory from the workspace."
+      "description": "Delete a directory from the workspace, with optional recursive deletion for non-empty directories."
     },
     {
       "name": "batch_operations",
-      "description": "Execute multiple file/directory operations in a single batch."
+      "description": "Execute multiple file/directory operations in a single batch for efficiency, with optional dry run capability."
     }
   ]
 } 
