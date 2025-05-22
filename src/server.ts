@@ -30,8 +30,8 @@ export function createTanukiServer(): FastMCP {
 
   // Only register tools if not in tool scan mode to speed up initialization
   if (!isToolScan) {
-    // Register all tools
-    registerAllTools(server);
+  // Register all tools
+  registerAllTools(server);
   } else {
     // For tool scanning, we'll manually handle tool list responses
     // by directly using the manifest in index.ts
