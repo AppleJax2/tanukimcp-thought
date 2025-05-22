@@ -9,6 +9,9 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
  */
 console.log('🚀 Starting Tanuki Sequential Thought MCP Server (stdio mode)...');
 
+// Set environment variables for Docker compatibility
+process.env.ENABLE_QUICK_STARTUP = 'true';
+
 // Check for IDE LLM mode flag
 const useIdeLlm = process.argv.includes('--ide-llm');
 if (useIdeLlm) {
@@ -19,14 +22,25 @@ if (useIdeLlm) {
     const configPath = path.join(process.cwd(), 'tanuki-config.json');
     
     if (existsSync(configPath)) {
-      const configData = JSON.parse(readFileSync(configPath, 'utf8'));
-      configData.useIdeLlm = true;
-      writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
-      console.log('✅ Updated tanuki-config.json with IDE LLM mode enabled');
+      try {
+        const configData = JSON.parse(readFileSync(configPath, 'utf8'));
+        configData.useIdeLlm = true;
+        writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        console.log('✅ Updated tanuki-config.json with IDE LLM mode enabled');
+      } catch (parseError) {
+        console.error('Error parsing config file:', parseError);
+        // Create a new config file if parsing fails
+        const defaultConfig = {
+          useIdeLlm: true,
+          autoCreateConfig: true,
+          projectRoot: process.cwd()
+        };
+        writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+        console.log('✅ Created new tanuki-config.json with IDE LLM mode enabled');
+      }
     } else {
       // Create minimal config file
       const defaultConfig = {
-        llmModel: "llama3.1",
         useIdeLlm: true,
         autoCreateConfig: true,
         projectRoot: process.cwd()
@@ -36,6 +50,7 @@ if (useIdeLlm) {
     }
   } catch (error) {
     console.error('⚠️ Failed to update config file:', error);
+    // Continue execution even if config file update fails
   }
 }
 
@@ -47,10 +62,18 @@ if (!process.env.PROJECT_ROOT) {
 }
 
 // Create the server
+console.log('Creating server...');
 const server = createTanukiServer();
 
 // Start the server in stdio mode
-server.start();
+console.log('Starting server...');
+try {
+  server.start();
+  console.log('Server started successfully');
+} catch (error) {
+  console.error('Error starting server:', error);
+  process.exit(1);
+}
 
 console.log('📋 Tanuki Sequential Thought MCP Server is ready to transform your ideas into structured tasks!');
 console.log('Available tools:');

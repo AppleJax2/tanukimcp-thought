@@ -13,10 +13,12 @@ RUN npm install --production
 COPY dist/ ./dist/
 COPY tools-response.json ./
 COPY smithery.yaml ./
+COPY tanuki-config.json ./
 
 # Set environment variables
 ENV NODE_ENV=production
 ENV ENABLE_QUICK_STARTUP=true
+ENV NODE_DEBUG=*
 
 # Create a healthcheck that returns immediately
 HEALTHCHECK --interval=5s --timeout=1s --retries=3 CMD [ "echo", "healthy" ]
