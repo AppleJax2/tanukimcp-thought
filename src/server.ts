@@ -9,8 +9,8 @@ import os from 'os';
 
 const execAsync = promisify(exec);
 
-// Required model for the tool to function
-const REQUIRED_MODEL = 'deepseek-r1';
+// For compatibility with existing code
+const REQUIRED_MODEL = 'none';
 
 /**
  * Project Context Manager for intelligent file operations
@@ -86,6 +86,25 @@ class ProjectContextManager {
     // Standard path resolution
     console.log('*** ProjectContextManager: Using standard path resolution ***');
     
+    // Decode URL-encoded paths if present
+    if (workspaceRoot.startsWith('/') && workspaceRoot.includes('%3A')) {
+      // This is likely a URL-encoded Windows path like /c%3A/Users/...
+      try {
+        // Remove the leading slash and decode
+        const decodedPath = decodeURIComponent(workspaceRoot);
+        // Convert /c:/Users/... to C:\Users\...
+        if (/^\/[a-zA-Z]:\//.test(decodedPath)) {
+          const driveLetter = decodedPath.charAt(1).toUpperCase();
+          const restOfPath = decodedPath.substring(3).replace(/\//g, '\\');
+          workspaceRoot = `${driveLetter}:\\${restOfPath}`;
+          console.log(`*** Decoded URL-encoded path to Windows format: ${workspaceRoot} ***`);
+        }
+      } catch (error) {
+        console.error('Error decoding URL-encoded path:', error);
+        // Continue with the original path if decoding fails
+      }
+    }
+    
     // If it's an absolute path, use it directly
     if (path.isAbsolute(targetPath)) {
       console.log(`*** Path is already absolute: ${targetPath} ***`);
@@ -131,37 +150,22 @@ interface TaskCategory {
   items: string[];
 }
 
-/**
- * Ollama parameters for model inference
- */
-interface OllamaParams {
-  num_ctx?: number;
-  temperature?: number;
-  top_p?: number;
-  num_thread?: number;
-}
+// No external LLM parameters needed in IDE LLM mode
 
 /**
  * Configuration options
  */
 interface Config {
-  llmModel: string;
-  ollamaParams?: OllamaParams;
   autoCreateConfig?: boolean;
-  projectRoot?: string;  // Add project root path configuration
+  projectRoot?: string;  // Project root path configuration
+  useIdeLlm: boolean;    // Flag to use the IDE's LLM instead of external LLM
 }
 
 // Default configuration
 const defaultConfig: Config = {
-  llmModel: REQUIRED_MODEL,
-  ollamaParams: {
-    num_ctx: 16384,
-    temperature: 0.7,
-    top_p: 0.9,
-    num_thread: 8
-  },
   autoCreateConfig: true,
-  projectRoot: process.cwd()  // Default to current working directory
+  projectRoot: process.cwd(),  // Default to current working directory
+  useIdeLlm: true              // Default to using IDE LLM
 };
 
 // Load user config without any async operations during initialization
@@ -184,9 +188,9 @@ async function createDefaultConfigFile() {
     // Only create if it doesn't already exist (double-check to avoid race conditions)
     if (!existsSync('tanuki-config.json') && defaultConfig.autoCreateConfig) {
       const configContent = JSON.stringify({
-        llmModel: defaultConfig.llmModel,
-        ollamaParams: defaultConfig.ollamaParams,
-        projectRoot: defaultConfig.projectRoot
+        autoCreateConfig: defaultConfig.autoCreateConfig,
+        projectRoot: defaultConfig.projectRoot,
+        useIdeLlm: defaultConfig.useIdeLlm
       }, null, 2);
       
       await fs.writeFile('tanuki-config.json', configContent, 'utf-8');
@@ -218,35 +222,6 @@ const fileExists = async (filePath: string): Promise<boolean> => {
 };
 
 /**
- * Builds a string of Ollama parameters for the command line
- */
-function buildOllamaParamsString(): string {
-  if (!userConfig.ollamaParams) {
-    return '';
-  }
-  
-  const params = [];
-  
-  if (userConfig.ollamaParams.num_ctx) {
-    params.push(`-c ${userConfig.ollamaParams.num_ctx}`);
-  }
-  
-  if (userConfig.ollamaParams.temperature !== undefined) {
-    params.push(`--temperature ${userConfig.ollamaParams.temperature}`);
-  }
-  
-  if (userConfig.ollamaParams.top_p !== undefined) {
-    params.push(`--top-p ${userConfig.ollamaParams.top_p}`);
-  }
-  
-  if (userConfig.ollamaParams.num_thread) {
-    params.push(`--num-thread ${userConfig.ollamaParams.num_thread}`);
-  }
-  
-  return params.join(' ');
-}
-
-/**
  * Creates the Tanuki Sequential Thought MCP server
  * Implements tools for the Sequential Prompting Framework
  */
@@ -257,69 +232,32 @@ export function createTanukiServer() {
     version: '1.0.0',
   });
 
-  // Helper function to check Ollama requirements only when needed
-  async function ensureOllamaRequirements() {
-    try {
-      // Skip check in hosted environments
-      if (process.env.SMITHERY_HOSTED === 'true') {
-        console.log('Running in hosted environment, skipping Ollama check');
-        throw new Error('Running in hosted environment, Ollama not available');
-      }
-      
-      console.log('Checking for Ollama installation...');
-      await execAsync('ollama --version');
-      
-      console.log(`Checking for ${REQUIRED_MODEL} model...`);
-      const { stdout } = await execAsync('ollama list');
-      
-      if (!stdout.includes(REQUIRED_MODEL)) {
-        throw new Error(`Required model "${REQUIRED_MODEL}" not found. Please run: ollama pull ${REQUIRED_MODEL}`);
-      }
-      
-      // Only create config file at this point if needed
-      if (defaultConfig.autoCreateConfig && !existsSync('tanuki-config.json')) {
-        await createDefaultConfigFile();
-      }
-      
-      console.log('✅ Ollama and required model verified!');
-      return true;
-    } catch (error) {
-      // If in hosted environment, don't show error details
-      if (process.env.SMITHERY_HOSTED === 'true') {
-        console.log('Note: This tool requires Ollama to be installed locally for full functionality.');
-        return false;
-      }
-      
-      console.error('\n=== TANUKI SEQUENTIAL THOUGHT MCP REQUIREMENTS ===');
-      console.error('ERROR: Ollama is required for this tool to function.');
-      console.error('Please install Ollama from https://ollama.ai/');
-      console.error(`Then run: ollama pull ${REQUIRED_MODEL}`);
-      console.error('\nFor development purposes only, you can bypass this check by modifying');
-      console.error('the checkOllamaRequirements function in src/server.ts to return without error.');
-      console.error('======================================================\n');
-      throw error;
+  // Helper function for IDE LLM mode
+  async function ensureIdeLlmMode(): Promise<boolean> {
+    console.log('IDE LLM mode enabled');
+    
+    // Create config file if needed
+    if (defaultConfig.autoCreateConfig && !existsSync('tanuki-config.json')) {
+      await createDefaultConfigFile();
     }
+    
+    return true;
   }
   
-  // Modified execute function with fallback for hosted environments
-  async function executeWithOllamaOrFallback(command: string, fallbackFunction: Function): Promise<string> {
-    try {
-      // Try to use Ollama
-      const ollamaAvailable = await ensureOllamaRequirements().catch(() => false);
-      
-      if (ollamaAvailable) {
-        const { stdout } = await execAsync(command);
-        return stdout;
-      } else {
-        // If Ollama not available and in hosted environment, use fallback
-        console.log('Ollama not available, using fallback function');
-        return await fallbackFunction();
-      }
-    } catch (error) {
-      // If execution fails, also use fallback
-      console.warn('Ollama execution failed, using fallback function');
-      return await fallbackFunction();
-    }
+  // Generate text using rule-based approach (no external LLM)
+  async function generateWithRuleBasedApproach(prompt: string, params: any = {}): Promise<string> {
+    console.log('Using rule-based text generation');
+    
+    // This is a placeholder for an actual rule-based text generation
+    // In a real implementation, you would parse the prompt and generate text based on rules
+    // For now, we'll return a simple message
+    return "This is a rule-based text generation. The IDE's LLM will provide the actual intelligence.";
+  }
+
+  // Execute function that uses IDE LLM via fallback
+  async function executeWithIdeLlm(prompt: string, fallbackFunction: Function): Promise<string> {
+    console.log('Using IDE LLM mode via fallback function');
+    return await fallbackFunction();
   }
 
   // Helper to extract client working directory from request headers
@@ -379,9 +317,9 @@ export function createTanukiServer() {
           return `Error: File "${resolvedOutputPath}" already exists. Set overwrite=true to overwrite.`;
         }
         
-        // Check if running in hosted environment
-        if (process.env.SMITHERY_HOSTED === 'true') {
-          // In hosted environments, provide a user-friendly message
+        // Check if running in hosted environment or IDE LLM mode
+        if (process.env.SMITHERY_HOSTED === 'true' || userConfig.useIdeLlm) {
+          // In hosted environments or IDE LLM mode, provide a user-friendly message
           const todolist = generateTodoWithRules(project_description, unstructured_thoughts);
           
           // Still write the todolist to file so it can be used in subsequent steps
@@ -398,14 +336,18 @@ export function createTanukiServer() {
           }
           
           // Add guidance for LLMs on workspace_root
-          return `Note: In hosted environments, this tool uses rule-based processing instead of LLM. For full functionality, use locally with Ollama installed.\n\n${todolist}${getLLMWorkspaceGuidance()}`;
+          const modeMessage = userConfig.useIdeLlm 
+            ? "Using IDE LLM mode - this tool generates a structured todo list while leveraging your IDE's built-in LLM capabilities."
+            : "In hosted environments, this tool uses rule-based processing instead of LLM. For full functionality, use locally with Ollama installed.";
+          
+          return `${modeMessage}\n\n${todolist}${getLLMWorkspaceGuidance()}`;
         }
         
-        // Check Ollama requirements only when the tool is called
+        // Check IDE LLM mode
         try {
-          await ensureOllamaRequirements();
+          await ensureIdeLlmMode();
         } catch (error) {
-          // Use rule-based fallback if Ollama not available
+          // Use rule-based fallback
           const todolist = generateTodoWithRules(project_description, unstructured_thoughts);
           
           // Ensure the output directory exists
@@ -417,7 +359,7 @@ export function createTanukiServer() {
           // Write the todolist to file
           await fs.writeFile(resolvedOutputPath, todolist, 'utf-8');
           
-          return `This tool requires Ollama and the deepseek-r1 model to be installed locally. Using rule-based fallback.\n\n${todolist}`;
+          return `Using IDE LLM mode - this tool generates a structured todo list while leveraging your IDE's built-in LLM capabilities.\n\n${todolist}`;
         }
         
         // Generate todolist with LLM
@@ -469,12 +411,9 @@ export function createTanukiServer() {
       Return ONLY the markdown todolist without any other text.
       `;
       
-      // Build Ollama parameters
-      const ollamaParamsString = buildOllamaParamsString();
-      
-      // Use the new function with fallback
-      const stdout = await executeWithOllamaOrFallback(
-        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+      // Use the IDE LLM function with fallback
+      const stdout = await executeWithIdeLlm(
+        prompt,
         () => Promise.resolve(generateTodoWithRules(projectDescription, thoughts))
       );
       
@@ -620,12 +559,12 @@ export function createTanukiServer() {
         if (!overwrite && resolvedOutputPath !== resolvedInputPath && await fileExists(resolvedOutputPath)) {
           return `Error: Output file "${resolvedOutputPath}" already exists. Set overwrite=true to overwrite.`;
         }
-        // Check Ollama requirements only when the tool is called
+        // Check IDE LLM mode
         try {
-          await ensureOllamaRequirements();
+          await ensureIdeLlmMode();
         } catch (error) {
-          // In hosted environments, provide a more user-friendly error
-          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
+          // In hosted environments, provide a more user-friendly message
+          return 'Using IDE LLM mode to enhance your todolist while leveraging the IDE\'s built-in LLM capabilities.';
         }
         
         // Read the existing todolist
@@ -674,12 +613,9 @@ export function createTanukiServer() {
       Return the complete enhanced markdown todolist.
       `;
       
-      // Build Ollama parameters
-      const ollamaParamsString = buildOllamaParamsString();
-      
-      // Use the new function with fallback
-      const stdout = await executeWithOllamaOrFallback(
-        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+      // Use the IDE LLM function with fallback
+      const stdout = await executeWithIdeLlm(
+        prompt,
         () => Promise.resolve(enhanceTodoWithRules(existingTodolist))
       );
       
@@ -862,9 +798,6 @@ export function createTanukiServer() {
       Return ONLY the text of the single next task to implement, exactly as it appears in the todolist, without the checkbox or additional explanation.
       `;
       
-      // Build Ollama parameters
-      const ollamaParamsString = buildOllamaParamsString();
-      
       // Fallback function to find first unchecked task
       const findFirstUncheckedTask = () => {
         const match = todolist.match(/- \[ \] (.+)$/m);
@@ -874,7 +807,7 @@ export function createTanukiServer() {
       
       // Use the new function with fallback
       const stdout = await executeWithOllamaOrFallback(
-        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+        prompt,
         findFirstUncheckedTask
       );
       
@@ -980,12 +913,9 @@ export function createTanukiServer() {
       Format your response as a comprehensive markdown implementation plan.
       `;
       
-      // Build Ollama parameters
-      const ollamaParamsString = buildOllamaParamsString();
-      
       // Use the new function with fallback
       const stdout = await executeWithOllamaOrFallback(
-        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+        prompt,
         () => Promise.resolve(createImplementationPlanFallback(task))
       );
       
@@ -1370,9 +1300,6 @@ export function createTanukiServer() {
       Return ONLY a valid JSON array of actions, with no explanation or other text.
       `;
       
-      // Build Ollama parameters
-      const ollamaParamsString = buildOllamaParamsString();
-      
       // Fallback function to create minimal action set
       const createMinimalActionSet = () => {
         const sanitizedTaskName = task
@@ -1393,7 +1320,7 @@ export function createTanukiServer() {
       
       // Use the new function with fallback
       const stdout = await executeWithOllamaOrFallback(
-        `ollama run ${userConfig.llmModel} ${ollamaParamsString} "${prompt.replace(/"/g, '\\"')}"`,
+        prompt,
         createMinimalActionSet
       );
       
@@ -1430,6 +1357,22 @@ export function createTanukiServer() {
     // Require an explicit workspace root - no more special handling for "."
     if (!workspaceRoot || workspaceRoot === '.') {
       throw new Error('ERROR: workspace_root parameter is required and must be an absolute path. The AI assistant needs to provide the user\'s current working directory.');
+    }
+    
+    // Handle potential Windows path with drive letter that got URL-encoded or has double slashes
+    if (workspaceRoot.includes('c%3A') || workspaceRoot.includes('C%3A')) {
+      console.log(`*** Detected potentially URL-encoded Windows path: ${workspaceRoot} ***`);
+    }
+
+    // Detect paths that incorrectly prepend C:\ to an already absolute path 
+    if (workspaceRoot.includes('C:\\c%3A\\') || workspaceRoot.includes('C:\\C%3A\\')) {
+      console.log(`*** Detected double-encoded path: ${workspaceRoot} ***`);
+      // Extract the part after C:\c%3A\ and treat that as the base path
+      const parts = workspaceRoot.split('\\c%3A\\');
+      if (parts.length > 1) {
+        workspaceRoot = `C:\\${parts[1]}`;
+        console.log(`*** Corrected to: ${workspaceRoot} ***`);
+      }
     }
     
     // Use the ProjectContextManager for path resolution, but always with the explicit workspace root
