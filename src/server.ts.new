@@ -755,7 +755,13 @@ export function createTanukiServer() {
           return `Error: Todolist file "${resolvedTodolistPath}" does not exist or is not accessible.`;
         }
         
-        // Tool now uses IDE's LLM by default
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
+        }
         
         // Read the todolist
         const todolist = await fs.readFile(resolvedTodolistPath, 'utf-8');
@@ -858,7 +864,13 @@ export function createTanukiServer() {
           return `Error: Todolist file "${resolvedTodolistPath}" does not exist or is not accessible.`;
         }
         
-        // Tool now uses IDE's LLM by default
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
+        }
         
         // Read the todolist for context
         const todolist = await fs.readFile(resolvedTodolistPath, 'utf-8');
