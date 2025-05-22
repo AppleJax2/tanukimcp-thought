@@ -232,20 +232,8 @@ export function createTanukiServer() {
     version: '1.0.0',
   });
 
-  // Check for quick startup mode (used for Smithery deployment)
-  const isQuickStartup = process.env.ENABLE_QUICK_STARTUP === 'true';
-  
-  if (isQuickStartup) {
-    console.log('⚡ Quick startup mode enabled for Smithery compatibility');
-  }
-
   // Helper function for IDE LLM mode
   async function ensureIdeLlmMode(): Promise<boolean> {
-    // If in quick startup mode, return immediately for tool scanning
-    if (isQuickStartup) {
-      return true;
-    }
-    
     console.log('IDE LLM mode enabled');
     
     // Create config file if needed
@@ -404,11 +392,6 @@ export function createTanukiServer() {
 
   // LLM-based todo generation
   async function generateTodoWithLLM(projectDescription: string, thoughts: string): Promise<string> {
-    // Skip intensive processing during quick startup
-    if (isQuickStartup) {
-      return "Quick startup mode: LLM todo generation will be available when fully loaded.";
-    }
-    
     try {
       const prompt = `
       Your task is to analyze the following unstructured thoughts about a project and organize them into a clear, structured todolist.
@@ -608,11 +591,6 @@ export function createTanukiServer() {
   
   // LLM-based todolist enhancement
   async function enhanceTodoWithLLM(existingTodolist: string): Promise<string> {
-    // Skip intensive processing during quick startup
-    if (isQuickStartup) {
-      return "Quick startup mode: LLM todolist enhancement will be available when fully loaded.";
-    }
-    
     try {
       const prompt = `
       Your task is to enhance and improve this todolist with more specific details, acceptance criteria, and technical requirements.
@@ -777,7 +755,13 @@ export function createTanukiServer() {
           return `Error: Todolist file "${resolvedTodolistPath}" does not exist or is not accessible.`;
         }
         
-        // Tool now uses IDE's LLM by default
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
+        }
         
         // Read the todolist
         const todolist = await fs.readFile(resolvedTodolistPath, 'utf-8');
@@ -799,11 +783,6 @@ export function createTanukiServer() {
   
   // LLM-based task prioritization
   async function findNextTaskWithLLM(todolist: string): Promise<string> {
-    // Skip intensive processing during quick startup
-    if (isQuickStartup) {
-      return "Quick startup mode: LLM task prioritization will be available when fully loaded.";
-    }
-    
     try {
       const prompt = `
       You are a project management assistant. Given the following todolist, identify the most logical next task to implement.
@@ -885,7 +864,13 @@ export function createTanukiServer() {
           return `Error: Todolist file "${resolvedTodolistPath}" does not exist or is not accessible.`;
         }
         
-        // Tool now uses IDE's LLM by default
+        // Check Ollama requirements only when the tool is called
+        try {
+          await ensureOllamaRequirements();
+        } catch (error) {
+          // In hosted environments, provide a more user-friendly error
+          return 'This tool requires Ollama and the deepseek-r1 model to be installed locally. Please see the installation instructions in the README.';
+        }
         
         // Read the todolist for context
         const todolist = await fs.readFile(resolvedTodolistPath, 'utf-8');
@@ -906,11 +891,6 @@ export function createTanukiServer() {
   
   // LLM-based implementation planning
   async function createImplementationPlanWithLLM(task: string, todolistContext: string): Promise<string> {
-    // Skip intensive processing during quick startup
-    if (isQuickStartup) {
-      return "Quick startup mode: LLM implementation planning will be available when fully loaded.";
-    }
-    
     try {
       const prompt = `
       You are a senior software engineer creating an implementation plan for a task in a project.
@@ -1287,16 +1267,6 @@ export function createTanukiServer() {
   
   // Helper function to parse the implementation plan into executable actions
   async function parsePlanIntoActions(plan: string, task: string): Promise<any[]> {
-    // Skip intensive processing during quick startup
-    if (isQuickStartup) {
-      return [{
-        type: 'create_file',
-        path: 'quick-startup-placeholder.md',
-        description: 'Placeholder for quick startup mode',
-        content: '# Quick Startup Mode\n\nFull functionality will be available when server is fully loaded.'
-      }];
-    }
-    
     try {
       const prompt = `
       You are a code implementation assistant. Your job is to analyze an implementation plan and extract specific file operations needed.

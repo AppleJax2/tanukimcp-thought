@@ -1,0 +1,7 @@
+version: 1
+start:
+  command: ["node", "dist/index.js", "--ide-llm"]
+tools:
+  manifest: "./tools-response.json"
+options:
+  lazy_loading: true 
