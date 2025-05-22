@@ -1,12 +1,43 @@
 import { createTanukiServer } from './server.js';
 import path from 'path';
 import fs from 'fs/promises';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 
 /**
  * Main entry point for the tanukimcp-thought MCP server
  * This automatically starts the server in stdio mode
  */
 console.log('🚀 Starting Tanuki Sequential Thought MCP Server (stdio mode)...');
+
+// Check for IDE LLM mode flag
+const useIdeLlm = process.argv.includes('--ide-llm');
+if (useIdeLlm) {
+  console.log('🧠 IDE LLM mode enabled - will use the IDE\'s built-in LLM capabilities');
+  
+  // Update config file if it exists
+  try {
+    const configPath = path.join(process.cwd(), 'tanuki-config.json');
+    
+    if (existsSync(configPath)) {
+      const configData = JSON.parse(readFileSync(configPath, 'utf8'));
+      configData.useIdeLlm = true;
+      writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+      console.log('✅ Updated tanuki-config.json with IDE LLM mode enabled');
+    } else {
+      // Create minimal config file
+      const defaultConfig = {
+        llmModel: "llama3.1",
+        useIdeLlm: true,
+        autoCreateConfig: true,
+        projectRoot: process.cwd()
+      };
+      writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+      console.log('✅ Created tanuki-config.json with IDE LLM mode enabled');
+    }
+  } catch (error) {
+    console.error('⚠️ Failed to update config file:', error);
+  }
+}
 
 // Set project root to current directory if not already set
 // This ensures file operations are always relative to where the server was started
@@ -43,4 +74,11 @@ console.log('- batch_operations: Execute multiple file operations in a batch');
 console.log('\n📌 IMPORTANT: To ensure file operations happen in the correct directory,');
 console.log('set the CLIENT_WORKING_DIR environment variable when starting the server:');
 console.log('  - Windows: set CLIENT_WORKING_DIR=C:\\path\\to\\your\\project && npx @applejax2/tanukimcp-thought');
-console.log('  - Linux/macOS: CLIENT_WORKING_DIR=/path/to/your/project npx @applejax2/tanukimcp-thought'); 
+console.log('  - Linux/macOS: CLIENT_WORKING_DIR=/path/to/your/project npx @applejax2/tanukimcp-thought');
+
+// Add information about IDE LLM mode
+console.log('\n🧠 To use the IDE\'s built-in LLM capabilities instead of Ollama:');
+console.log('  - Use the --ide-llm flag when starting the server:');
+console.log('  - Windows: npx @applejax2/tanukimcp-thought --ide-llm');
+console.log('  - Linux/macOS: npx @applejax2/tanukimcp-thought --ide-llm');
+console.log('  - Or add "useIdeLlm": true to your tanuki-config.json file'); 
