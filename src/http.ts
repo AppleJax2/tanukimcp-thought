@@ -1,4 +1,8 @@
 import { createTanukiServer } from './server.js';
+import http from 'http';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * HTTP entry point for the tanukimcp-thought MCP server
@@ -12,8 +16,40 @@ console.log(`🚀 Starting Tanuki Sequential Thought MCP Server (HTTP mode)...`)
 // SMITHERY_COMPATIBILITY: Ensure faster server startup for tool scanning
 process.env.ENABLE_QUICK_STARTUP = 'true';
 
-// Create and start the server
+// Create the main server
 const server = createTanukiServer();
+
+// Create a simple HTTP server specifically for the tools list endpoint
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const toolsManifestPath = path.join(__dirname, '..', 'tools-manifest.json');
+
+const httpServer = http.createServer(async (req, res) => {
+  if (req.url === '/tools-list') {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      // Read the tools manifest file
+      const toolsManifest = await fs.readFile(toolsManifestPath, 'utf8');
+      res.statusCode = 200;
+      res.end(toolsManifest);
+    } catch (error) {
+      console.error('Error reading tools manifest:', error);
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Failed to read tools manifest' }));
+    }
+  } else {
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: 'Not found' }));
+  }
+});
+
+// Listen on a different port
+const toolsListPort = port + 1;
+httpServer.listen(toolsListPort, host, () => {
+  console.log(`📋 Tools list server running at http://${host === '0.0.0.0' ? 'localhost' : host}:${toolsListPort}/tools-list`);
+});
+
+// Start the main MCP server
 server.start({
   transportType: 'sse',
   sse: {
