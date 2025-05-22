@@ -26,5 +26,14 @@ console.log('- brain_dump_organize: Transform unstructured thoughts into a struc
 console.log('- enhance_todolist: Add detailed specifications to a todolist');
 console.log('- find_next_task: Identify the next logical task to implement');
 console.log('- plan_task_implementation: Create a detailed implementation plan for a task');
+console.log('- task_executor: Execute a planned task by implementing necessary file operations');
 console.log('- mark_task_complete: Mark a task as complete in the todolist');
-console.log('- sequential_thinking: Apply sequential thinking to break down a complex problem'); 
+console.log('- create_file: Create a new file with specified content');
+console.log('- edit_file: Edit an existing file by applying changes');
+console.log('- delete_file: Delete a file from the workspace');
+console.log('- move_file: Move a file from one location to another');
+console.log('- copy_file: Copy a file from one location to another');
+console.log('- create_directory: Create a new directory');
+console.log('- list_directory: List contents of a directory');
+console.log('- delete_directory: Delete a directory');
+console.log('- batch_operations: Execute multiple file operations in a batch'); 

@@ -2,7 +2,7 @@ import { FastMCP } from 'fastmcp';
 import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import os from 'os';
@@ -168,7 +168,7 @@ const defaultConfig: Config = {
 let userConfig: Config = defaultConfig;
 try {
   if (existsSync('tanuki-config.json')) {
-    const configContent = require('fs').readFileSync('tanuki-config.json', 'utf-8');
+    const configContent = readFileSync('tanuki-config.json', 'utf-8');
     userConfig = JSON.parse(configContent);
   }
   // Note: We're not creating the config file here anymore - moved to a function that will be called during tool execution
