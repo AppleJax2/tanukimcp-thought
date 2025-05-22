@@ -1,3 +1,20 @@
+// Tool scan fast path: must be the very first code in the file!
+if (process.env.SMITHERY_HOSTED === 'true' && process.env.SMITHERY_TOOL_SCAN === 'true') {
+  // Use dynamic import for fs and path
+  (async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    try {
+      const toolsManifest = fs.readFileSync(path.join(process.cwd(), 'tools-manifest.json'), 'utf-8');
+      process.stdout.write(toolsManifest);
+      process.exit(0);
+    } catch (error) {
+      process.stderr.write('Error reading tool manifest: ' + error + '\n');
+      process.exit(1);
+    }
+  })();
+}
+
 import { createTanukiServer } from './server.js';
 import path from 'path';
 import { existsSync, writeFileSync, readFileSync } from 'fs';
@@ -19,19 +36,7 @@ process.env.USE_IDE_LLM = 'true';
 const isSmitheryDeployment = process.env.SMITHERY_HOSTED === 'true';
 const isToolScan = process.env.SMITHERY_TOOL_SCAN === 'true';
 
-// Special fast path for Smithery tool scanning
-if (isSmitheryDeployment && isToolScan) {
-  console.log('🔍 Detected Smithery tool scan - using cached tool manifest for instant response');
-  try {
-    // Read the tool manifest directly to avoid any initialization
-    const toolsManifest = readFileSync(path.join(process.cwd(), 'tools-manifest.json'), 'utf-8');
-    console.log('✅ Using cached tool manifest for Smithery tool scanning');
-    // Don't initialize anything else for tool scanning
-    process.exit(0);
-  } catch (error) {
-    console.error('⚠️ Error reading tool manifest:', error);
-  }
-}
+// Special fast path for Smithery tool scanning (now handled at the very top)
 
 if (isSmitheryDeployment) {
   console.log('📦 Running in Smithery deployment mode - optimized for tool scanning');
