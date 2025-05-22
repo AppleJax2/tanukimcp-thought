@@ -83,35 +83,10 @@ class ProjectContextManager {
    * Intelligently resolve a path based on project context
    */
   public resolvePath(workspaceRoot: string, targetPath: string, projectHint?: string): string {
-    // If we detect we're in a tool directory, try to use a project directory instead
-    if (this.isToolDirectory(workspaceRoot)) {
-      console.log('*** ProjectContextManager: Detected tool directory, using project context instead ***');
-      console.log(`*** Current workspace: ${workspaceRoot} ***`);
-      
-      // If we have a current project context, use that
-      if (this.currentProject && this.projectRegistry.has(this.currentProject)) {
-        const projectPath = this.projectRegistry.get(this.currentProject)!.path;
-        console.log(`*** Using existing project context: ${this.currentProject} at ${projectPath} ***`);
-        return path.resolve(projectPath, targetPath);
-      }
-      
-      // If we have a project hint, try to create a directory for it
-      if (projectHint) {
-        const projectDir = this.createProjectDirectory(projectHint);
-        console.log(`*** Created new project directory for: ${projectHint} at ${projectDir} ***`);
-        return path.resolve(projectDir, targetPath);
-      }
-      
-      // Fall back to creating a general projects directory
-      const projectsDir = path.join(os.homedir(), 'projects', 'general');
-      console.log(`*** Using general projects directory: ${projectsDir} ***`);
-      if (!existsSync(projectsDir)) {
-        fs.mkdir(projectsDir, { recursive: true }).catch(err => console.error('Error creating general projects directory:', err));
-      }
-      return path.resolve(projectsDir, targetPath);
-    }
-    
-    // Standard path resolution if not in a tool directory
+    // MODIFIED: Always use the provided workspace root, even if it's in a tool directory
+    // This ensures we respect the user's current directory in Cursor or other environments
+
+    // Standard path resolution
     console.log('*** ProjectContextManager: Using standard path resolution ***');
     const projectRoot = userConfig.projectRoot || process.env.PROJECT_ROOT || process.cwd();
     const effectiveRoot = path.isAbsolute(workspaceRoot) ? 
