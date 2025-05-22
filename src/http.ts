@@ -2,12 +2,15 @@ import { createTanukiServer } from './server.js';
 
 /**
  * HTTP entry point for the tanukimcp-thought MCP server
- * This automatically starts the server in HTTP/SSE mode
+ * This automatically starts the server in HTTP/SSE mode with optimizations for Smithery
  */
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 const host = process.env.HOST || '0.0.0.0';
 
 console.log(`🚀 Starting Tanuki Sequential Thought MCP Server (HTTP mode)...`);
+
+// SMITHERY_COMPATIBILITY: Ensure faster server startup for tool scanning
+process.env.ENABLE_QUICK_STARTUP = 'true';
 
 // Create and start the server
 const server = createTanukiServer();
