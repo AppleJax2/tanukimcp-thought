@@ -194,6 +194,7 @@ mcp_tanukimcp-thought_find_next_task
 mcp_tanukimcp-thought_plan_task_implementation
 mcp_tanukimcp-thought_mark_task_complete
 mcp_tanukimcp-thought_task_executor
+mcp_tanukimcp-thought_sequential_thinking
 ```
 
 Find, plan, implement, and track tasks in a logical sequence:
@@ -202,6 +203,7 @@ Find, plan, implement, and track tasks in a logical sequence:
 - **plan_task_implementation** - Creates a detailed implementation plan for a specific task
 - **task_executor** - Actually implements the task by performing the necessary file operations
 - **mark_task_complete** - Updates the todolist to mark a task as complete
+- **sequential_thinking** - Applies sequential thinking to break down a complex problem
 
 ## 🔄 Example Workflow
 
