@@ -11,7 +11,7 @@ RUN npm install --production
 
 # Copy only necessary files
 COPY dist/ ./dist/
-COPY tools-manifest.json ./
+COPY tools-response.json ./
 COPY smithery.yaml ./
 
 # Set environment variables
