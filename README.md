@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/applejax2-tanukimcp-thought-badge.png)](https://mseep.ai/app/applejax2-tanukimcp-thought)
+
 # 🦝 Tanuki Sequential Thought MCP
 
 A sequential thinking framework for AI assistants that transforms unstructured thoughts into organized, executable tasks using your IDE's built-in LLM capabilities.
